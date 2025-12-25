@@ -10,7 +10,7 @@ import voluptuous as vol
 from homeassistant import config_entries
 from homeassistant.components.climate import DOMAIN as CLIMATE_DOMAIN
 from homeassistant.components.sensor import DOMAIN as SENSOR_DOMAIN
-from homeassistant.const import CONF_NAME, UnitOfTemperature
+from homeassistant.const import CONF_NAME, UnitOfTemperature, __version__ as HA_VERSION
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.data_entry_flow import FlowResult
 from homeassistant.helpers import selector
@@ -217,7 +217,7 @@ class SmartHeatingConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
                 result = await client.register_installation(
                     name=self._installation_name,
-                    ha_version=self.hass.config.version,
+                    ha_version=HA_VERSION,
                     price_area=self._price_area,
                     outdoor_temp_entity_id=self._outdoor_temp_entity,
                     latitude=latitude,
