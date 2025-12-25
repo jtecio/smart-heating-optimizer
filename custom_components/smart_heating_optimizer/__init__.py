@@ -8,7 +8,7 @@ from datetime import datetime, timedelta
 from typing import Any
 
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import Platform
+from homeassistant.const import Platform, __version__ as HA_VERSION
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.helpers.event import async_track_time_interval
@@ -244,7 +244,7 @@ class SmartHeatingCoordinator(DataUpdateCoordinator):
             result = await self.client.send_telemetry(
                 zones=zone_telemetry,
                 outdoor_temp=outdoor_temp,
-                ha_version=self.hass.config.version,
+                ha_version=HA_VERSION,
                 component_version="1.0.0",
             )
             _LOGGER.debug(
