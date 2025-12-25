@@ -1,0 +1,22 @@
+trigger_optimization:
+  name: Trigger Optimization
+  description: Manually trigger optimization for all zones
+  fields:
+    force:
+      name: Force
+      description: Force re-optimization even if recently optimized
+      required: false
+      default: false
+      selector:
+        boolean:
+    target_date:
+      name: Target Date
+      description: Target date for optimization (YYYY-MM-DD)
+      required: false
+      example: "2025-12-26"
+      selector:
+        date:
+
+send_telemetry:
+  name: Send Telemetry
+  description: Manually send telemetry data to the IoT Platform

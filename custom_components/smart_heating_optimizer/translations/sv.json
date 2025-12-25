@@ -1,0 +1,162 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Anslut till IoT Platform",
+        "description": "Ange dina IoT Platform-uppgifter. Du kan få en API-nyckel från iot.jtec.io",
+        "data": {
+          "api_url": "API URL",
+          "api_key": "API-nyckel",
+          "customer_id": "Kund-ID"
+        },
+        "data_description": {
+          "api_url": "URL till IoT Platform API (standard: {api_url})",
+          "api_key": "Din IoT Platform API-nyckel med HA-integrationsrättigheter",
+          "customer_id": "Ditt kund-ID från IoT Platform"
+        }
+      },
+      "existing": {
+        "title": "Befintlig installation hittad",
+        "description": "En installation med namnet **{name}** finns redan för denna API-nyckel. Vill du ansluta till den?"
+      },
+      "setup": {
+        "title": "Installationssetup",
+        "description": "Konfigurera din Smart Heating-installation",
+        "data": {
+          "name": "Installationsnamn",
+          "price_area": "Elprisområde",
+          "outdoor_temp_entity": "Utomhustemperatursensor"
+        },
+        "data_description": {
+          "name": "Ett namn för ditt hem (t.ex. 'Mitt Hus')",
+          "price_area": "Ditt elprisområde (SE1-SE4 för Sverige)",
+          "outdoor_temp_entity": "Valfritt: Välj en utomhustemperatursensor för bättre förutsägelser"
+        }
+      },
+      "add_zone_prompt": {
+        "title": "Lägg till zoner",
+        "description": "Du har lagt till {zone_count} zon(er). Vill du lägga till en till?",
+        "data": {
+          "add_zone": "Lägg till en zon till"
+        }
+      },
+      "zone": {
+        "title": "Lägg till zon",
+        "description": "Konfigurera en värmezone (rum)",
+        "data": {
+          "zone_name": "Zonnamn",
+          "temperature_entity": "Temperatursensor",
+          "climate_entity": "Termostat",
+          "humidity_entity": "Fuktighetssensor",
+          "power_entity": "Effektsensor",
+          "min_temp": "Minimitemperatur",
+          "max_temp": "Maximitemperatur",
+          "target_temp": "Måltemperatur",
+          "auto_control": "Aktivera automatisk styrning"
+        },
+        "data_description": {
+          "zone_name": "Namn på rummet (t.ex. 'Vardagsrum')",
+          "temperature_entity": "Temperatursensor i detta rum",
+          "climate_entity": "Termostat/radiator att styra",
+          "humidity_entity": "Valfritt: Fuktighetssensor i detta rum",
+          "power_entity": "Valfritt: Effektmätare för värmaren",
+          "min_temp": "Lägsta tillåtna temperatur",
+          "max_temp": "Högsta tillåtna temperatur",
+          "target_temp": "Önskad komforttemperatur",
+          "auto_control": "Tillåt optimeraren att justera termostaten"
+        }
+      }
+    },
+    "error": {
+      "invalid_auth": "Ogiltig API-nyckel eller otillräckliga rättigheter",
+      "cannot_connect": "Kunde inte ansluta till IoT Platform",
+      "unknown": "Ett okänt fel uppstod",
+      "registration_failed": "Misslyckades med att registrera installation",
+      "zone_creation_failed": "Misslyckades med att skapa zon"
+    },
+    "abort": {
+      "already_configured": "Denna installation är redan konfigurerad"
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Smart Heating-alternativ",
+        "menu_options": {
+          "add_zone": "Lägg till zon",
+          "manage_zones": "Hantera zoner",
+          "settings": "Inställningar"
+        }
+      },
+      "add_zone": {
+        "title": "Lägg till zon",
+        "description": "Konfigurera en ny värmezone",
+        "data": {
+          "zone_name": "Zonnamn",
+          "temperature_entity": "Temperatursensor",
+          "climate_entity": "Termostat",
+          "humidity_entity": "Fuktighetssensor",
+          "power_entity": "Effektsensor",
+          "min_temp": "Minimitemperatur",
+          "max_temp": "Maximitemperatur",
+          "target_temp": "Måltemperatur",
+          "auto_control": "Aktivera automatisk styrning"
+        }
+      },
+      "manage_zones": {
+        "title": "Hantera zoner",
+        "description": "Välj en zon att redigera",
+        "data": {
+          "zone": "Zon"
+        }
+      },
+      "edit_zone": {
+        "title": "Redigera zon: {zone_name}",
+        "description": "Uppdatera zoninställningar",
+        "data": {
+          "zone_name": "Zonnamn",
+          "min_temp": "Minimitemperatur",
+          "max_temp": "Maximitemperatur",
+          "target_temp": "Måltemperatur",
+          "auto_control": "Aktivera automatisk styrning"
+        }
+      },
+      "settings": {
+        "title": "Inställningar",
+        "description": "Uppdatera installationsinställningar",
+        "data": {
+          "price_area": "Elprisområde",
+          "outdoor_temp_entity": "Utomhustemperatursensor"
+        }
+      }
+    },
+    "error": {
+      "zone_creation_failed": "Misslyckades med att skapa zon",
+      "update_failed": "Misslyckades med att uppdatera inställningar"
+    },
+    "abort": {
+      "no_zones": "Inga zoner konfigurerade",
+      "zone_not_found": "Zon hittades inte"
+    }
+  },
+  "services": {
+    "trigger_optimization": {
+      "name": "Trigga optimering",
+      "description": "Manuellt trigga optimering för alla zoner",
+      "fields": {
+        "force": {
+          "name": "Tvinga",
+          "description": "Tvinga omoptimering även om nyligen optimerad"
+        },
+        "target_date": {
+          "name": "Måldatum",
+          "description": "Måldatum för optimering (ÅÅÅÅ-MM-DD)"
+        }
+      }
+    },
+    "send_telemetry": {
+      "name": "Skicka telemetri",
+      "description": "Manuellt skicka telemetridata till IoT Platform"
+    }
+  }
+}

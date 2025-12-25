@@ -1,0 +1,162 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Connect to IoT Platform",
+        "description": "Enter your IoT Platform credentials. You can get an API key from iot.jtec.io",
+        "data": {
+          "api_url": "API URL",
+          "api_key": "API Key",
+          "customer_id": "Customer ID"
+        },
+        "data_description": {
+          "api_url": "URL to the IoT Platform API (default: {api_url})",
+          "api_key": "Your IoT Platform API key with HA integration permissions",
+          "customer_id": "Your customer ID from the IoT Platform"
+        }
+      },
+      "existing": {
+        "title": "Existing Installation Found",
+        "description": "An installation named **{name}** already exists for this API key. Do you want to connect to it?"
+      },
+      "setup": {
+        "title": "Installation Setup",
+        "description": "Configure your Smart Heating installation",
+        "data": {
+          "name": "Installation Name",
+          "price_area": "Electricity Price Area",
+          "outdoor_temp_entity": "Outdoor Temperature Sensor"
+        },
+        "data_description": {
+          "name": "A name for your home (e.g., 'My House')",
+          "price_area": "Your electricity price area (SE1-SE4 for Sweden)",
+          "outdoor_temp_entity": "Optional: Select an outdoor temperature sensor for better predictions"
+        }
+      },
+      "add_zone_prompt": {
+        "title": "Add Zones",
+        "description": "You have added {zone_count} zone(s). Would you like to add another zone?",
+        "data": {
+          "add_zone": "Add another zone"
+        }
+      },
+      "zone": {
+        "title": "Add Zone",
+        "description": "Configure a heating zone (room)",
+        "data": {
+          "zone_name": "Zone Name",
+          "temperature_entity": "Temperature Sensor",
+          "climate_entity": "Thermostat",
+          "humidity_entity": "Humidity Sensor",
+          "power_entity": "Power Sensor",
+          "min_temp": "Minimum Temperature",
+          "max_temp": "Maximum Temperature",
+          "target_temp": "Target Temperature",
+          "auto_control": "Enable Automatic Control"
+        },
+        "data_description": {
+          "zone_name": "Name of the room (e.g., 'Living Room')",
+          "temperature_entity": "Temperature sensor in this room",
+          "climate_entity": "Thermostat/radiator to control",
+          "humidity_entity": "Optional: Humidity sensor in this room",
+          "power_entity": "Optional: Power meter for the heater",
+          "min_temp": "Minimum allowed temperature",
+          "max_temp": "Maximum allowed temperature",
+          "target_temp": "Desired comfort temperature",
+          "auto_control": "Allow the optimizer to adjust the thermostat"
+        }
+      }
+    },
+    "error": {
+      "invalid_auth": "Invalid API key or insufficient permissions",
+      "cannot_connect": "Could not connect to the IoT Platform",
+      "unknown": "An unknown error occurred",
+      "registration_failed": "Failed to register installation",
+      "zone_creation_failed": "Failed to create zone"
+    },
+    "abort": {
+      "already_configured": "This installation is already configured"
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Smart Heating Options",
+        "menu_options": {
+          "add_zone": "Add Zone",
+          "manage_zones": "Manage Zones",
+          "settings": "Settings"
+        }
+      },
+      "add_zone": {
+        "title": "Add Zone",
+        "description": "Configure a new heating zone",
+        "data": {
+          "zone_name": "Zone Name",
+          "temperature_entity": "Temperature Sensor",
+          "climate_entity": "Thermostat",
+          "humidity_entity": "Humidity Sensor",
+          "power_entity": "Power Sensor",
+          "min_temp": "Minimum Temperature",
+          "max_temp": "Maximum Temperature",
+          "target_temp": "Target Temperature",
+          "auto_control": "Enable Automatic Control"
+        }
+      },
+      "manage_zones": {
+        "title": "Manage Zones",
+        "description": "Select a zone to edit",
+        "data": {
+          "zone": "Zone"
+        }
+      },
+      "edit_zone": {
+        "title": "Edit Zone: {zone_name}",
+        "description": "Update zone settings",
+        "data": {
+          "zone_name": "Zone Name",
+          "min_temp": "Minimum Temperature",
+          "max_temp": "Maximum Temperature",
+          "target_temp": "Target Temperature",
+          "auto_control": "Enable Automatic Control"
+        }
+      },
+      "settings": {
+        "title": "Settings",
+        "description": "Update installation settings",
+        "data": {
+          "price_area": "Electricity Price Area",
+          "outdoor_temp_entity": "Outdoor Temperature Sensor"
+        }
+      }
+    },
+    "error": {
+      "zone_creation_failed": "Failed to create zone",
+      "update_failed": "Failed to update settings"
+    },
+    "abort": {
+      "no_zones": "No zones configured",
+      "zone_not_found": "Zone not found"
+    }
+  },
+  "services": {
+    "trigger_optimization": {
+      "name": "Trigger Optimization",
+      "description": "Manually trigger optimization for all zones",
+      "fields": {
+        "force": {
+          "name": "Force",
+          "description": "Force re-optimization even if recently optimized"
+        },
+        "target_date": {
+          "name": "Target Date",
+          "description": "Target date for optimization (YYYY-MM-DD)"
+        }
+      }
+    },
+    "send_telemetry": {
+      "name": "Send Telemetry",
+      "description": "Manually send telemetry data to the IoT Platform"
+    }
+  }
+}
