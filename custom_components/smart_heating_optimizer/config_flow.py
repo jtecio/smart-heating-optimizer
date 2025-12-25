@@ -57,6 +57,7 @@ async def validate_api_connection(
     customer_id: str,
 ) -> dict[str, Any]:
     """Validate the API connection."""
+    _LOGGER.debug("Validating API connection to %s", api_url)
     session = async_get_clientsession(hass)
     client = SmartHeatingAPIClient(
         api_url=api_url,
@@ -68,15 +69,22 @@ async def validate_api_connection(
     try:
         # Try to get existing installation
         installation = await client.get_installation()
+        _LOGGER.info("Found existing installation: %s", installation.get("name"))
         return {
             "installation_id": installation.get("id"),
             "name": installation.get("name"),
             "existing": True,
         }
     except SmartHeatingAPIError as err:
+        _LOGGER.debug(
+            "API error during validation: status_code=%s, message=%s",
+            err.status_code, str(err)
+        )
         if err.status_code == 404:
             # No installation exists yet - that's OK
+            _LOGGER.info("No existing installation found (404) - proceeding with setup")
             return {"existing": False}
+        _LOGGER.error("Unexpected API error: %s", err)
         raise
 
 
@@ -125,11 +133,20 @@ class SmartHeatingConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 # New installation - go to setup step
                 return await self.async_step_setup()
 
-            except SmartHeatingAuthError:
+            except SmartHeatingAuthError as err:
+                _LOGGER.warning("Authentication error: %s", err)
                 errors["base"] = "invalid_auth"
-            except SmartHeatingConnectionError:
+            except SmartHeatingConnectionError as err:
+                _LOGGER.warning("Connection error: %s", err)
                 errors["base"] = "cannot_connect"
-            except SmartHeatingAPIError:
+            except SmartHeatingAPIError as err:
+                _LOGGER.error(
+                    "API error (status=%s): %s",
+                    getattr(err, 'status_code', None), err
+                )
+                errors["base"] = "unknown"
+            except Exception as err:
+                _LOGGER.exception("Unexpected exception during API validation: %s", err)
                 errors["base"] = "unknown"
 
         return self.async_show_form(

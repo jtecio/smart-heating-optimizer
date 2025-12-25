@@ -118,13 +118,20 @@ class SmartHeatingAPIClient:
 
                 # For error responses, try to get error details
                 if response.status >= 400:
+                    error_detail = f"HTTP {response.status}"
                     try:
                         error_body = await response.json()
-                        error_detail = error_body.get("detail", str(error_body))
+                        if isinstance(error_body, dict):
+                            error_detail = error_body.get("detail", str(error_body))
+                        else:
+                            error_detail = str(error_body)
                     except Exception:
-                        error_detail = await response.text()
+                        pass  # Keep default error_detail
 
-                    _LOGGER.debug("API error response: %s", error_detail)
+                    _LOGGER.warning(
+                        "API error: %s %s -> %s: %s",
+                        method, url, response.status, error_detail
+                    )
                     raise SmartHeatingAPIError(
                         f"API error: {error_detail}",
                         status_code=response.status,
