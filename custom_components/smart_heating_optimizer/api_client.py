@@ -92,6 +92,8 @@ class SmartHeatingAPIClient:
         if self._session is None:
             self._session = aiohttp.ClientSession()
 
+        _LOGGER.debug("API request: %s %s params=%s", method, url, params)
+
         try:
             async with self._session.request(
                 method,
@@ -99,7 +101,10 @@ class SmartHeatingAPIClient:
                 json=data,
                 params=params,
                 headers=self._get_headers(),
+                timeout=aiohttp.ClientTimeout(total=30),
             ) as response:
+                _LOGGER.debug("API response: %s %s -> %s", method, url, response.status)
+
                 if response.status == 401:
                     raise SmartHeatingAuthError(
                         "Invalid API key",
@@ -111,19 +116,41 @@ class SmartHeatingAPIClient:
                         status_code=403,
                     )
 
-                response.raise_for_status()
+                # For error responses, try to get error details
+                if response.status >= 400:
+                    try:
+                        error_body = await response.json()
+                        error_detail = error_body.get("detail", str(error_body))
+                    except Exception:
+                        error_detail = await response.text()
+
+                    _LOGGER.debug("API error response: %s", error_detail)
+                    raise SmartHeatingAPIError(
+                        f"API error: {error_detail}",
+                        status_code=response.status,
+                    )
+
                 return await response.json()
 
+        except SmartHeatingAPIError:
+            raise
+        except SmartHeatingAuthError:
+            raise
         except ClientResponseError as err:
-            _LOGGER.error("API error: %s %s - %s", method, url, err)
+            _LOGGER.error("API error: %s %s - status=%s message=%s", method, url, err.status, err.message)
             raise SmartHeatingAPIError(
                 f"API error: {err.message}",
                 status_code=err.status,
             ) from err
         except ClientError as err:
-            _LOGGER.error("Connection error: %s", err)
+            _LOGGER.error("Connection error: %s %s - %s", method, url, err)
             raise SmartHeatingConnectionError(
                 f"Connection error: {err}",
+            ) from err
+        except Exception as err:
+            _LOGGER.error("Unexpected error: %s %s - %s: %s", method, url, type(err).__name__, err)
+            raise SmartHeatingAPIError(
+                f"Unexpected error: {err}",
             ) from err
 
     async def test_connection(self) -> bool:
