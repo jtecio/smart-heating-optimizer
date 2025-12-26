@@ -112,13 +112,21 @@
       },
       "edit_zone": {
         "title": "Edit Zone: {zone_name}",
-        "description": "Update zone settings",
+        "description": "Update zone settings. Check 'Delete Zone' and submit to remove this zone.",
         "data": {
           "zone_name": "Zone Name",
           "min_temp": "Minimum Temperature",
           "max_temp": "Maximum Temperature",
           "target_temp": "Target Temperature",
-          "auto_control": "Enable Automatic Control"
+          "auto_control": "Enable Automatic Control",
+          "delete_zone": "Delete Zone"
+        }
+      },
+      "confirm_delete_zone": {
+        "title": "Delete Zone: {zone_name}",
+        "description": "Are you sure you want to delete this zone? This action cannot be undone. All historical data for this zone will be preserved.",
+        "data": {
+          "confirm": "Yes, delete this zone"
         }
       },
       "settings": {
@@ -136,7 +144,8 @@
     },
     "abort": {
       "no_zones": "No zones configured",
-      "zone_not_found": "Zone not found"
+      "zone_not_found": "Zone not found",
+      "delete_failed": "Failed to delete zone"
     }
   },
   "services": {
@@ -157,6 +166,24 @@
     "send_telemetry": {
       "name": "Send Telemetry",
       "description": "Manually send telemetry data to the IoT Platform"
+    },
+    "boost": {
+      "name": "Boost",
+      "description": "Temporarily increase temperature for comfort",
+      "fields": {
+        "zone_id": {
+          "name": "Zone ID",
+          "description": "Specific zone to boost (leave empty for all zones)"
+        },
+        "duration": {
+          "name": "Duration",
+          "description": "Boost duration in minutes"
+        },
+        "increase": {
+          "name": "Temperature Increase",
+          "description": "Temperature increase in degrees Celsius"
+        }
+      }
     }
   }
 }

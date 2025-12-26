@@ -26,9 +26,14 @@ from .const import (
     ATTR_NEXT_SETPOINT_REASON,
     ATTR_NEXT_SETPOINT_TIME,
     ATTR_OBSERVATIONS_NEEDED,
+    ATTR_PRICE_LEVEL,
+    ATTR_TODAY_AVG_PRICE,
+    ATTR_TODAY_MAX_PRICE,
+    ATTR_TODAY_MIN_PRICE,
     DOMAIN,
     ICON_HEATING,
     ICON_ML,
+    ICON_PRICE,
     ICON_SAVINGS,
     ICON_STATUS,
 )
@@ -49,6 +54,13 @@ async def async_setup_entry(
     entities.append(InstallationSavingsTodaySensor(coordinator, entry))
     entities.append(InstallationSavingsTotalSensor(coordinator, entry))
 
+    # Add spot price sensors
+    entities.append(SpotPriceCurrentSensor(coordinator, entry))
+    entities.append(SpotPriceLevelSensor(coordinator, entry))
+
+    # Add diagnostics sensor
+    entities.append(ConnectionStatusSensor(coordinator, entry))
+
     # Add zone-level sensors
     for zone in coordinator.zones:
         entities.extend(
@@ -58,6 +70,9 @@ async def async_setup_entry(
                 ZoneNextChangeSensor(coordinator, entry, zone),
                 ZoneMLAccuracySensor(coordinator, entry, zone),
                 ZoneObservationsSensor(coordinator, entry, zone),
+                ZoneAppliedSetpointSensor(coordinator, entry, zone),
+                ZoneBoostStatusSensor(coordinator, entry, zone),
+                ZoneCurrentTempSensor(coordinator, entry, zone),
             ]
         )
 
@@ -370,3 +385,258 @@ class ZoneObservationsSensor(ZoneBaseSensor):
             ATTR_OBSERVATIONS_NEEDED: needed,
             ATTR_ML_STATUS: zone.get("status", "unknown"),
         }
+
+
+class SpotPriceCurrentSensor(SmartHeatingBaseSensor):
+    """Sensor for current spot price."""
+
+    _attr_icon = ICON_PRICE
+    _attr_native_unit_of_measurement = "SEK/kWh"
+    _attr_state_class = SensorStateClass.MEASUREMENT
+
+    def __init__(
+        self,
+        coordinator: SmartHeatingCoordinator,
+        entry: ConfigEntry,
+    ) -> None:
+        """Initialize the sensor."""
+        super().__init__(coordinator, entry)
+        self._attr_unique_id = f"{entry.entry_id}_spot_price"
+        self._attr_name = "Spot Price"
+
+    @property
+    def native_value(self) -> float | None:
+        """Return the state."""
+        spot_price = self.coordinator.spot_price
+        if spot_price:
+            return spot_price.get("current_price_sek_kwh")
+        return None
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        """Return extra attributes."""
+        spot_price = self.coordinator.spot_price
+        if not spot_price:
+            return {}
+        return {
+            ATTR_PRICE_LEVEL: spot_price.get("price_level"),
+            ATTR_TODAY_AVG_PRICE: spot_price.get("today_avg_price_sek_kwh"),
+            ATTR_TODAY_MIN_PRICE: spot_price.get("today_min_price_sek_kwh"),
+            ATTR_TODAY_MAX_PRICE: spot_price.get("today_max_price_sek_kwh"),
+            "next_price_sek_kwh": spot_price.get("next_price_sek_kwh"),
+            "next_price_at": spot_price.get("next_price_at"),
+        }
+
+
+class SpotPriceLevelSensor(SmartHeatingBaseSensor):
+    """Sensor for spot price level (low/normal/high)."""
+
+    _attr_icon = ICON_PRICE
+
+    def __init__(
+        self,
+        coordinator: SmartHeatingCoordinator,
+        entry: ConfigEntry,
+    ) -> None:
+        """Initialize the sensor."""
+        super().__init__(coordinator, entry)
+        self._attr_unique_id = f"{entry.entry_id}_spot_price_level"
+        self._attr_name = "Price Level"
+
+    @property
+    def native_value(self) -> str | None:
+        """Return the state."""
+        spot_price = self.coordinator.spot_price
+        if spot_price:
+            return spot_price.get("price_level", "unknown")
+        return "unknown"
+
+    @property
+    def icon(self) -> str:
+        """Return dynamic icon based on price level."""
+        level = self.native_value
+        if level == "low":
+            return "mdi:arrow-down-circle"
+        elif level == "high":
+            return "mdi:arrow-up-circle"
+        return "mdi:minus-circle"
+
+
+class ZoneAppliedSetpointSensor(ZoneBaseSensor):
+    """Sensor for last applied setpoint."""
+
+    _attr_icon = ICON_HEATING
+    _attr_native_unit_of_measurement = "°C"
+    _attr_state_class = SensorStateClass.MEASUREMENT
+
+    def __init__(
+        self,
+        coordinator: SmartHeatingCoordinator,
+        entry: ConfigEntry,
+        zone: dict[str, Any],
+    ) -> None:
+        """Initialize the sensor."""
+        super().__init__(coordinator, entry, zone)
+        self._attr_unique_id = f"{entry.entry_id}_{self._zone_id}_applied_setpoint"
+        self._attr_name = "Applied Setpoint"
+
+    @property
+    def native_value(self) -> float | None:
+        """Return the state."""
+        setpoint = self.coordinator.get_applied_setpoint(str(self._zone_id))
+        if setpoint:
+            return setpoint.get("temperature_c")
+        return None
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        """Return extra attributes."""
+        setpoint = self.coordinator.get_applied_setpoint(str(self._zone_id))
+        if not setpoint:
+            return {}
+        return {
+            "reason": setpoint.get("reason"),
+            "valid_until": setpoint.get("valid_until"),
+            "expected_savings_sek": setpoint.get("expected_savings_sek"),
+            "applied_at": setpoint.get("applied_at"),
+        }
+
+
+class ZoneBoostStatusSensor(ZoneBaseSensor):
+    """Sensor for zone boost status."""
+
+    _attr_icon = "mdi:rocket-launch"
+
+    def __init__(
+        self,
+        coordinator: SmartHeatingCoordinator,
+        entry: ConfigEntry,
+        zone: dict[str, Any],
+    ) -> None:
+        """Initialize the sensor."""
+        super().__init__(coordinator, entry, zone)
+        self._attr_unique_id = f"{entry.entry_id}_{self._zone_id}_boost_status"
+        self._attr_name = "Boost Status"
+
+    @property
+    def native_value(self) -> str:
+        """Return the state."""
+        if self.coordinator.is_boosted(str(self._zone_id)):
+            return "active"
+        return "inactive"
+
+    @property
+    def icon(self) -> str:
+        """Return dynamic icon."""
+        if self.native_value == "active":
+            return "mdi:rocket-launch"
+        return "mdi:rocket-launch-outline"
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        """Return extra attributes."""
+        zone_id = str(self._zone_id)
+        if hasattr(self.coordinator, '_boost_until'):
+            boost_until = self.coordinator._boost_until.get(zone_id)
+            if boost_until:
+                return {
+                    "boost_until": boost_until.isoformat(),
+                    "is_boosted": self.coordinator.is_boosted(zone_id),
+                }
+        return {"is_boosted": False}
+
+
+class ZoneCurrentTempSensor(ZoneBaseSensor):
+    """Sensor for zone current temperature (from climate entity)."""
+
+    _attr_icon = "mdi:thermometer"
+    _attr_native_unit_of_measurement = "°C"
+    _attr_state_class = SensorStateClass.MEASUREMENT
+    _attr_device_class = SensorDeviceClass.TEMPERATURE
+
+    def __init__(
+        self,
+        coordinator: SmartHeatingCoordinator,
+        entry: ConfigEntry,
+        zone: dict[str, Any],
+    ) -> None:
+        """Initialize the sensor."""
+        super().__init__(coordinator, entry, zone)
+        self._attr_unique_id = f"{entry.entry_id}_{self._zone_id}_current_temp"
+        self._attr_name = "Current Temperature"
+
+    @property
+    def native_value(self) -> float | None:
+        """Return the state."""
+        zone = self._get_zone_data()
+        return zone.get("current_temp_c")
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        """Return extra attributes."""
+        zone = self._get_zone_data()
+        return {
+            "setpoint_c": zone.get("current_setpoint_c"),
+            "heating_active": zone.get("heating_active"),
+            "humidity_pct": zone.get("humidity_pct"),
+        }
+
+
+class ConnectionStatusSensor(SmartHeatingBaseSensor):
+    """Sensor for connection and diagnostics status."""
+
+    _attr_icon = "mdi:connection"
+
+    def __init__(
+        self,
+        coordinator: SmartHeatingCoordinator,
+        entry: ConfigEntry,
+    ) -> None:
+        """Initialize the sensor."""
+        super().__init__(coordinator, entry)
+        self._attr_unique_id = f"{entry.entry_id}_connection_status"
+        self._attr_name = "Connection Status"
+
+    @property
+    def native_value(self) -> str:
+        """Return the state."""
+        if self.coordinator.last_update_success:
+            return "connected"
+        return "disconnected"
+
+    @property
+    def icon(self) -> str:
+        """Return dynamic icon."""
+        if self.native_value == "connected":
+            return "mdi:cloud-check"
+        return "mdi:cloud-off-outline"
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        """Return extra attributes."""
+        installation = self.coordinator.installation
+        dashboard = self.coordinator.dashboard
+
+        # Get last update time if available
+        last_update = None
+        if hasattr(self.coordinator, 'last_update_success_time') and self.coordinator.last_update_success_time:
+            last_update = self.coordinator.last_update_success_time.isoformat()
+
+        attrs = {
+            "last_update": last_update,
+            "update_interval_seconds": 60,
+            "zones_count": len(self.coordinator.zones),
+            "telemetry_count": installation.get("telemetry_count", 0),
+            "last_telemetry_at": installation.get("last_telemetry_at"),
+            "optimization_enabled": installation.get("optimization_enabled", True),
+            "optimization_mode": installation.get("optimization_mode", "balanced"),
+            "away_mode": self.coordinator.is_away_mode,
+        }
+
+        # Add counts from dashboard
+        if dashboard:
+            attrs["zones_optimizing"] = dashboard.get("zones_optimizing", 0)
+            attrs["zones_learning"] = dashboard.get("zones_learning", 0)
+            attrs["zones_error"] = dashboard.get("zones_error", 0)
+
+        return attrs

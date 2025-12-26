@@ -40,7 +40,7 @@ PRICE_AREAS: Final = [
 ]
 
 # Platforms
-PLATFORMS: Final = ["sensor", "switch"]
+PLATFORMS: Final = ["sensor", "switch", "select", "button", "number"]
 
 # Update intervals
 SCAN_INTERVAL: Final = 60  # seconds for coordinator
@@ -88,6 +88,9 @@ ICON_SAVINGS: Final = "mdi:cash-multiple"
 ICON_STATUS: Final = "mdi:information-outline"
 ICON_ML: Final = "mdi:brain"
 ICON_AUTO: Final = "mdi:robot"
+ICON_PRICE: Final = "mdi:currency-usd"
+ICON_BOOST: Final = "mdi:rocket-launch"
+ICON_MODE: Final = "mdi:tune"
 
 # Attributes
 ATTR_ZONE_ID: Final = "zone_id"
@@ -99,3 +102,9 @@ ATTR_NEXT_SETPOINT_TIME: Final = "next_setpoint_time"
 ATTR_NEXT_SETPOINT_REASON: Final = "next_setpoint_reason"
 ATTR_CURRENT_PRICE: Final = "current_price"
 ATTR_IS_CHEAP_PERIOD: Final = "is_cheap_period"
+ATTR_PRICE_LEVEL: Final = "price_level"
+ATTR_TODAY_AVG_PRICE: Final = "today_avg_price"
+ATTR_TODAY_MIN_PRICE: Final = "today_min_price"
+ATTR_TODAY_MAX_PRICE: Final = "today_max_price"
+ATTR_BOOST_UNTIL: Final = "boost_until"
+ATTR_OPTIMIZATION_MODE: Final = "optimization_mode"

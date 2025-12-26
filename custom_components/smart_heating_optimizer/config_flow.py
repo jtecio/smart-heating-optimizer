@@ -610,6 +610,10 @@ class SmartHeatingOptionsFlow(config_entries.OptionsFlow):
             return self.async_abort(reason="zone_not_found")
 
         if user_input is not None:
+            # Check if delete was requested
+            if user_input.get("delete_zone"):
+                return await self.async_step_confirm_delete_zone()
+
             # Update the zone
             session = async_get_clientsession(self.hass)
             client = SmartHeatingAPIClient(
@@ -674,10 +678,53 @@ class SmartHeatingOptionsFlow(config_entries.OptionsFlow):
                         CONF_AUTO_CONTROL,
                         default=zone.get("auto_control_enabled", True),
                     ): bool,
+                    vol.Optional("delete_zone", default=False): bool,
                 }
             ),
             description_placeholders={
                 "zone_name": zone.get("name", "Zone"),
+            },
+        )
+
+    async def async_step_confirm_delete_zone(
+        self,
+        user_input: dict[str, Any] | None = None,
+    ) -> FlowResult:
+        """Confirm zone deletion."""
+        zone = next(
+            (z for z in self._zones if z["id"] == self._selected_zone_id),
+            None,
+        )
+
+        if user_input is not None:
+            if user_input.get("confirm"):
+                # Delete the zone
+                session = async_get_clientsession(self.hass)
+                client = SmartHeatingAPIClient(
+                    api_url=self._config_entry.data[CONF_API_URL],
+                    api_key=self._config_entry.data[CONF_API_KEY],
+                    customer_id=self._config_entry.data[CONF_CUSTOMER_ID],
+                    session=session,
+                )
+
+                try:
+                    await client.delete_zone(self._selected_zone_id)
+                    return self.async_create_entry(title="", data={})
+                except SmartHeatingAPIError as err:
+                    _LOGGER.error("Failed to delete zone: %s", err)
+                    return self.async_abort(reason="delete_failed")
+            else:
+                return await self.async_step_edit_zone()
+
+        return self.async_show_form(
+            step_id="confirm_delete_zone",
+            data_schema=vol.Schema(
+                {
+                    vol.Required("confirm", default=False): bool,
+                }
+            ),
+            description_placeholders={
+                "zone_name": zone.get("name", "Zone") if zone else "Zone",
             },
         )
 

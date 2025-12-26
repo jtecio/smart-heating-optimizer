@@ -36,6 +36,9 @@ async def async_setup_entry(
 
     entities: list[SwitchEntity] = []
 
+    # Add installation-level switches
+    entities.append(AwayModeSwitch(coordinator, entry))
+
     # Add auto-control switch for each zone
     for zone in coordinator.zones:
         entities.append(ZoneAutoControlSwitch(coordinator, entry, zone, client))
@@ -105,3 +108,61 @@ class ZoneAutoControlSwitch(CoordinatorEntity, SwitchEntity):
             await self.coordinator.async_request_refresh()
         except SmartHeatingAPIError as err:
             _LOGGER.error("Failed to update auto-control: %s", err)
+
+
+class AwayModeSwitch(CoordinatorEntity, SwitchEntity):
+    """Switch for away mode - sets all zones to minimum temperature."""
+
+    _attr_has_entity_name = True
+    _attr_icon = "mdi:home-export-outline"
+
+    def __init__(
+        self,
+        coordinator: SmartHeatingCoordinator,
+        entry: ConfigEntry,
+    ) -> None:
+        """Initialize the switch."""
+        super().__init__(coordinator)
+        self._entry = entry
+        self._attr_unique_id = f"{entry.entry_id}_away_mode"
+        self._attr_name = "Away Mode"
+        self._attr_device_info = DeviceInfo(
+            identifiers={(DOMAIN, entry.entry_id)},
+            name=f"Smart Heating - {coordinator.installation.get('name', 'Home')}",
+            manufacturer="JTEC",
+            model="Smart Heating Optimizer",
+            sw_version="1.0.0",
+        )
+
+    @property
+    def is_on(self) -> bool:
+        """Return true if away mode is enabled."""
+        return self.coordinator.is_away_mode
+
+    @property
+    def icon(self) -> str:
+        """Return dynamic icon."""
+        if self.is_on:
+            return "mdi:home-export-outline"
+        return "mdi:home"
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        """Return extra attributes."""
+        attrs = {
+            "zones_affected": len(self.coordinator.zones),
+        }
+        if self.coordinator.is_away_mode:
+            attrs["away_since"] = self.coordinator.away_mode_since
+            attrs["saved_setpoints"] = len(self.coordinator._saved_setpoints)
+        return attrs
+
+    async def async_turn_on(self, **kwargs: Any) -> None:
+        """Turn on away mode - set all zones to min temp."""
+        await self.coordinator.async_set_away_mode(True)
+        self.async_write_ha_state()
+
+    async def async_turn_off(self, **kwargs: Any) -> None:
+        """Turn off away mode - restore previous temperatures."""
+        await self.coordinator.async_set_away_mode(False)
+        self.async_write_ha_state()

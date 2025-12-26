@@ -3,7 +3,7 @@
   "name": "Smart Heating Optimizer",
   "codeowners": ["@jtecio"],
   "config_flow": true,
-  "dependencies": ["mqtt"],
+  "dependencies": [],
   "documentation": "https://github.com/jtecio/smart-heating-optimizer",
   "integration_type": "hub",
   "iot_class": "cloud_push",
