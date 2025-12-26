@@ -697,88 +697,98 @@ class SmartHeatingOptionsFlow(config_entries.OptionsFlow):
             except SmartHeatingAPIError as err:
                 _LOGGER.error("Failed to update zone: %s", err)
 
+        # Build schema dynamically - entity selectors can't have None as default
+        schema_dict: dict[vol.Marker, Any] = {
+            vol.Required(CONF_ZONE_NAME, default=zone.get("name", "")): str,
+            vol.Required(
+                CONF_HEATING_TYPE,
+                default=zone.get("heating_type", HEATING_TYPE_UNKNOWN),
+            ): selector.SelectSelector(
+                selector.SelectSelectorConfig(
+                    options=[
+                        selector.SelectOptionDict(value=ht["value"], label=ht["label"])
+                        for ht in HEATING_TYPES
+                    ],
+                    mode=selector.SelectSelectorMode.DROPDOWN,
+                )
+            ),
+        }
+
+        # Add optional entity fields - only set default if value exists
+        valve_entity = zone.get("valve_entity_id")
+        if valve_entity:
+            schema_dict[vol.Optional(CONF_VALVE_ENTITY, default=valve_entity)] = selector.EntitySelector(
+                selector.EntitySelectorConfig(domain=[CLIMATE_DOMAIN, "number"])
+            )
+        else:
+            schema_dict[vol.Optional(CONF_VALVE_ENTITY)] = selector.EntitySelector(
+                selector.EntitySelectorConfig(domain=[CLIMATE_DOMAIN, "number"])
+            )
+
+        supply_temp = zone.get("supply_temp_entity_id")
+        if supply_temp:
+            schema_dict[vol.Optional(CONF_SUPPLY_TEMP_ENTITY, default=supply_temp)] = selector.EntitySelector(
+                selector.EntitySelectorConfig(domain=SENSOR_DOMAIN, device_class="temperature")
+            )
+        else:
+            schema_dict[vol.Optional(CONF_SUPPLY_TEMP_ENTITY)] = selector.EntitySelector(
+                selector.EntitySelectorConfig(domain=SENSOR_DOMAIN, device_class="temperature")
+            )
+
+        return_temp = zone.get("return_temp_entity_id")
+        if return_temp:
+            schema_dict[vol.Optional(CONF_RETURN_TEMP_ENTITY, default=return_temp)] = selector.EntitySelector(
+                selector.EntitySelectorConfig(domain=SENSOR_DOMAIN, device_class="temperature")
+            )
+        else:
+            schema_dict[vol.Optional(CONF_RETURN_TEMP_ENTITY)] = selector.EntitySelector(
+                selector.EntitySelectorConfig(domain=SENSOR_DOMAIN, device_class="temperature")
+            )
+
+        # Add temperature and control fields
+        schema_dict.update({
+            vol.Optional(
+                CONF_MIN_TEMP,
+                default=zone.get("min_temp_c", DEFAULT_MIN_TEMP),
+            ): selector.NumberSelector(
+                selector.NumberSelectorConfig(
+                    min=5,
+                    max=30,
+                    step=0.5,
+                    unit_of_measurement=UnitOfTemperature.CELSIUS,
+                )
+            ),
+            vol.Optional(
+                CONF_MAX_TEMP,
+                default=zone.get("max_temp_c", DEFAULT_MAX_TEMP),
+            ): selector.NumberSelector(
+                selector.NumberSelectorConfig(
+                    min=10,
+                    max=35,
+                    step=0.5,
+                    unit_of_measurement=UnitOfTemperature.CELSIUS,
+                )
+            ),
+            vol.Optional(
+                CONF_TARGET_TEMP,
+                default=zone.get("target_temp_c", DEFAULT_TARGET_TEMP),
+            ): selector.NumberSelector(
+                selector.NumberSelectorConfig(
+                    min=10,
+                    max=30,
+                    step=0.5,
+                    unit_of_measurement=UnitOfTemperature.CELSIUS,
+                )
+            ),
+            vol.Optional(
+                CONF_AUTO_CONTROL,
+                default=zone.get("auto_control_enabled", True),
+            ): bool,
+        })
+
         return self.async_show_form(
             step_id="edit_zone",
-            data_schema=vol.Schema(
-                {
-                    vol.Required(CONF_ZONE_NAME, default=zone.get("name", "")): str,
-                    vol.Required(
-                        CONF_HEATING_TYPE,
-                        default=zone.get("heating_type", HEATING_TYPE_UNKNOWN),
-                    ): selector.SelectSelector(
-                        selector.SelectSelectorConfig(
-                            options=[
-                                selector.SelectOptionDict(value=ht["value"], label=ht["label"])
-                                for ht in HEATING_TYPES
-                            ],
-                            mode=selector.SelectSelectorMode.DROPDOWN,
-                        )
-                    ),
-                    vol.Optional(
-                        CONF_VALVE_ENTITY,
-                        default=zone.get("valve_entity_id"),
-                    ): selector.EntitySelector(
-                        selector.EntitySelectorConfig(
-                            domain=[CLIMATE_DOMAIN, "number"],
-                        )
-                    ),
-                    vol.Optional(
-                        CONF_SUPPLY_TEMP_ENTITY,
-                        default=zone.get("supply_temp_entity_id"),
-                    ): selector.EntitySelector(
-                        selector.EntitySelectorConfig(
-                            domain=SENSOR_DOMAIN,
-                            device_class="temperature",
-                        )
-                    ),
-                    vol.Optional(
-                        CONF_RETURN_TEMP_ENTITY,
-                        default=zone.get("return_temp_entity_id"),
-                    ): selector.EntitySelector(
-                        selector.EntitySelectorConfig(
-                            domain=SENSOR_DOMAIN,
-                            device_class="temperature",
-                        )
-                    ),
-                    vol.Optional(
-                        CONF_MIN_TEMP,
-                        default=zone.get("min_temp_c", DEFAULT_MIN_TEMP),
-                    ): selector.NumberSelector(
-                        selector.NumberSelectorConfig(
-                            min=5,
-                            max=30,
-                            step=0.5,
-                            unit_of_measurement=UnitOfTemperature.CELSIUS,
-                        )
-                    ),
-                    vol.Optional(
-                        CONF_MAX_TEMP,
-                        default=zone.get("max_temp_c", DEFAULT_MAX_TEMP),
-                    ): selector.NumberSelector(
-                        selector.NumberSelectorConfig(
-                            min=10,
-                            max=35,
-                            step=0.5,
-                            unit_of_measurement=UnitOfTemperature.CELSIUS,
-                        )
-                    ),
-                    vol.Optional(
-                        CONF_TARGET_TEMP,
-                        default=zone.get("target_temp_c", DEFAULT_TARGET_TEMP),
-                    ): selector.NumberSelector(
-                        selector.NumberSelectorConfig(
-                            min=10,
-                            max=30,
-                            step=0.5,
-                            unit_of_measurement=UnitOfTemperature.CELSIUS,
-                        )
-                    ),
-                    vol.Optional(
-                        CONF_AUTO_CONTROL,
-                        default=zone.get("auto_control_enabled", True),
-                    ): bool,
-                }
-            ),
+            data_schema=vol.Schema(schema_dict),
             description_placeholders={
                 "zone_name": zone.get("name", "Zone"),
             },
