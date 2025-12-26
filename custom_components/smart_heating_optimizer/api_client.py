@@ -92,8 +92,6 @@ class SmartHeatingAPIClient:
         if self._session is None:
             self._session = aiohttp.ClientSession()
 
-        _LOGGER.debug("API request: %s %s params=%s", method, url, params)
-
         try:
             async with self._session.request(
                 method,
@@ -101,10 +99,7 @@ class SmartHeatingAPIClient:
                 json=data,
                 params=params,
                 headers=self._get_headers(),
-                timeout=aiohttp.ClientTimeout(total=30),
             ) as response:
-                _LOGGER.debug("API response: %s %s -> %s", method, url, response.status)
-
                 if response.status == 401:
                     raise SmartHeatingAuthError(
                         "Invalid API key",
@@ -116,48 +111,19 @@ class SmartHeatingAPIClient:
                         status_code=403,
                     )
 
-                # For error responses, try to get error details
-                if response.status >= 400:
-                    error_detail = f"HTTP {response.status}"
-                    try:
-                        error_body = await response.json()
-                        if isinstance(error_body, dict):
-                            error_detail = error_body.get("detail", str(error_body))
-                        else:
-                            error_detail = str(error_body)
-                    except Exception:
-                        pass  # Keep default error_detail
-
-                    _LOGGER.warning(
-                        "API error: %s %s -> %s: %s",
-                        method, url, response.status, error_detail
-                    )
-                    raise SmartHeatingAPIError(
-                        f"API error: {error_detail}",
-                        status_code=response.status,
-                    )
-
+                response.raise_for_status()
                 return await response.json()
 
-        except SmartHeatingAPIError:
-            raise
-        except SmartHeatingAuthError:
-            raise
         except ClientResponseError as err:
-            _LOGGER.error("API error: %s %s - status=%s message=%s", method, url, err.status, err.message)
+            _LOGGER.error("API error: %s %s - %s", method, url, err)
             raise SmartHeatingAPIError(
                 f"API error: {err.message}",
                 status_code=err.status,
             ) from err
         except ClientError as err:
-            _LOGGER.error("Connection error: %s %s - %s", method, url, err)
+            _LOGGER.error("Connection error: %s", err)
             raise SmartHeatingConnectionError(
                 f"Connection error: {err}",
-            ) from err
-        except Exception as err:
-            _LOGGER.error("Unexpected error: %s %s - %s: %s", method, url, type(err).__name__, err)
-            raise SmartHeatingAPIError(
-                f"Unexpected error: {err}",
             ) from err
 
     async def test_connection(self) -> bool:
@@ -234,8 +200,12 @@ class SmartHeatingAPIClient:
         name: str,
         temperature_entity_id: str,
         climate_entity_id: str,
+        heating_type: str = "unknown",
         humidity_entity_id: str | None = None,
         power_entity_id: str | None = None,
+        valve_entity_id: str | None = None,
+        supply_temp_entity_id: str | None = None,
+        return_temp_entity_id: str | None = None,
         ha_area_id: str | None = None,
         ha_area_name: str | None = None,
         min_temp: float | None = None,
@@ -246,10 +216,14 @@ class SmartHeatingAPIClient:
         """Create a new zone."""
         data = {
             "name": name,
+            "heating_type": heating_type,
             "temperature_entity_id": temperature_entity_id,
             "climate_entity_id": climate_entity_id,
             "humidity_entity_id": humidity_entity_id,
             "power_entity_id": power_entity_id,
+            "valve_entity_id": valve_entity_id,
+            "supply_temp_entity_id": supply_temp_entity_id,
+            "return_temp_entity_id": return_temp_entity_id,
             "ha_area_id": ha_area_id,
             "ha_area_name": ha_area_name,
             "min_temp_c": min_temp,

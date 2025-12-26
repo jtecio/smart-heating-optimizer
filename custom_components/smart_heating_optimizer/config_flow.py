@@ -10,7 +10,7 @@ import voluptuous as vol
 from homeassistant import config_entries
 from homeassistant.components.climate import DOMAIN as CLIMATE_DOMAIN
 from homeassistant.components.sensor import DOMAIN as SENSOR_DOMAIN
-from homeassistant.const import CONF_NAME, UnitOfTemperature, __version__ as HA_VERSION
+from homeassistant.const import CONF_NAME, UnitOfTemperature
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.data_entry_flow import FlowResult
 from homeassistant.helpers import selector
@@ -28,6 +28,7 @@ from .const import (
     CONF_AUTO_CONTROL,
     CONF_CLIMATE_ENTITY,
     CONF_CUSTOMER_ID,
+    CONF_HEATING_TYPE,
     CONF_HUMIDITY_ENTITY,
     CONF_INSTALLATION_ID,
     CONF_MAX_TEMP,
@@ -35,8 +36,11 @@ from .const import (
     CONF_OUTDOOR_TEMP_ENTITY,
     CONF_POWER_ENTITY,
     CONF_PRICE_AREA,
+    CONF_RETURN_TEMP_ENTITY,
+    CONF_SUPPLY_TEMP_ENTITY,
     CONF_TARGET_TEMP,
     CONF_TEMPERATURE_ENTITY,
+    CONF_VALVE_ENTITY,
     CONF_ZONE_NAME,
     DEFAULT_API_URL,
     DEFAULT_MAX_TEMP,
@@ -44,6 +48,11 @@ from .const import (
     DEFAULT_PRICE_AREA,
     DEFAULT_TARGET_TEMP,
     DOMAIN,
+    HEATING_TYPE_ELECTRIC,
+    HEATING_TYPE_HYDRONIC,
+    HEATING_TYPE_MIXED,
+    HEATING_TYPE_UNKNOWN,
+    HEATING_TYPES,
     PRICE_AREAS,
 )
 
@@ -57,7 +66,6 @@ async def validate_api_connection(
     customer_id: str,
 ) -> dict[str, Any]:
     """Validate the API connection."""
-    _LOGGER.debug("Validating API connection to %s", api_url)
     session = async_get_clientsession(hass)
     client = SmartHeatingAPIClient(
         api_url=api_url,
@@ -69,22 +77,15 @@ async def validate_api_connection(
     try:
         # Try to get existing installation
         installation = await client.get_installation()
-        _LOGGER.info("Found existing installation: %s", installation.get("name"))
         return {
             "installation_id": installation.get("id"),
             "name": installation.get("name"),
             "existing": True,
         }
     except SmartHeatingAPIError as err:
-        _LOGGER.debug(
-            "API error during validation: status_code=%s, message=%s",
-            err.status_code, str(err)
-        )
         if err.status_code == 404:
             # No installation exists yet - that's OK
-            _LOGGER.info("No existing installation found (404) - proceeding with setup")
             return {"existing": False}
-        _LOGGER.error("Unexpected API error: %s", err)
         raise
 
 
@@ -133,20 +134,11 @@ class SmartHeatingConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 # New installation - go to setup step
                 return await self.async_step_setup()
 
-            except SmartHeatingAuthError as err:
-                _LOGGER.warning("Authentication error: %s", err)
+            except SmartHeatingAuthError:
                 errors["base"] = "invalid_auth"
-            except SmartHeatingConnectionError as err:
-                _LOGGER.warning("Connection error: %s", err)
+            except SmartHeatingConnectionError:
                 errors["base"] = "cannot_connect"
-            except SmartHeatingAPIError as err:
-                _LOGGER.error(
-                    "API error (status=%s): %s",
-                    getattr(err, 'status_code', None), err
-                )
-                errors["base"] = "unknown"
-            except Exception as err:
-                _LOGGER.exception("Unexpected exception during API validation: %s", err)
+            except SmartHeatingAPIError:
                 errors["base"] = "unknown"
 
         return self.async_show_form(
@@ -217,7 +209,7 @@ class SmartHeatingConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
                 result = await client.register_installation(
                     name=self._installation_name,
-                    ha_version=HA_VERSION,
+                    ha_version=self.hass.config.version,
                     price_area=self._price_area,
                     outdoor_temp_entity_id=self._outdoor_temp_entity,
                     latitude=latitude,
@@ -307,10 +299,14 @@ class SmartHeatingConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
         if user_input is not None:
             zone_name = user_input[CONF_ZONE_NAME]
+            heating_type = user_input.get(CONF_HEATING_TYPE, HEATING_TYPE_UNKNOWN)
             temp_entity = user_input[CONF_TEMPERATURE_ENTITY]
             climate_entity = user_input[CONF_CLIMATE_ENTITY]
             humidity_entity = user_input.get(CONF_HUMIDITY_ENTITY)
             power_entity = user_input.get(CONF_POWER_ENTITY)
+            valve_entity = user_input.get(CONF_VALVE_ENTITY)
+            supply_temp_entity = user_input.get(CONF_SUPPLY_TEMP_ENTITY)
+            return_temp_entity = user_input.get(CONF_RETURN_TEMP_ENTITY)
             min_temp = user_input.get(CONF_MIN_TEMP, DEFAULT_MIN_TEMP)
             max_temp = user_input.get(CONF_MAX_TEMP, DEFAULT_MAX_TEMP)
             target_temp = user_input.get(CONF_TARGET_TEMP, DEFAULT_TARGET_TEMP)
@@ -329,10 +325,14 @@ class SmartHeatingConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             try:
                 zone_result = await client.create_zone(
                     name=zone_name,
+                    heating_type=heating_type,
                     temperature_entity_id=temp_entity,
                     climate_entity_id=climate_entity,
                     humidity_entity_id=humidity_entity,
                     power_entity_id=power_entity,
+                    valve_entity_id=valve_entity,
+                    supply_temp_entity_id=supply_temp_entity,
+                    return_temp_entity_id=return_temp_entity,
                     min_temp=min_temp,
                     max_temp=max_temp,
                     target_temp=target_temp,
@@ -343,6 +343,7 @@ class SmartHeatingConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                     {
                         "id": zone_result["id"],
                         "name": zone_name,
+                        "heating_type": heating_type,
                         "temperature_entity": temp_entity,
                         "climate_entity": climate_entity,
                     }
@@ -360,6 +361,15 @@ class SmartHeatingConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             data_schema=vol.Schema(
                 {
                     vol.Required(CONF_ZONE_NAME): str,
+                    vol.Required(CONF_HEATING_TYPE, default=HEATING_TYPE_UNKNOWN): selector.SelectSelector(
+                        selector.SelectSelectorConfig(
+                            options=[
+                                selector.SelectOptionDict(value=ht["value"], label=ht["label"])
+                                for ht in HEATING_TYPES
+                            ],
+                            mode=selector.SelectSelectorMode.DROPDOWN,
+                        )
+                    ),
                     vol.Required(CONF_TEMPERATURE_ENTITY): selector.EntitySelector(
                         selector.EntitySelectorConfig(
                             domain=SENSOR_DOMAIN,
@@ -381,6 +391,23 @@ class SmartHeatingConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                         selector.EntitySelectorConfig(
                             domain=SENSOR_DOMAIN,
                             device_class="power",
+                        )
+                    ),
+                    vol.Optional(CONF_VALVE_ENTITY): selector.EntitySelector(
+                        selector.EntitySelectorConfig(
+                            domain=[CLIMATE_DOMAIN, "number"],
+                        )
+                    ),
+                    vol.Optional(CONF_SUPPLY_TEMP_ENTITY): selector.EntitySelector(
+                        selector.EntitySelectorConfig(
+                            domain=SENSOR_DOMAIN,
+                            device_class="temperature",
+                        )
+                    ),
+                    vol.Optional(CONF_RETURN_TEMP_ENTITY): selector.EntitySelector(
+                        selector.EntitySelectorConfig(
+                            domain=SENSOR_DOMAIN,
+                            device_class="temperature",
                         )
                     ),
                     vol.Optional(CONF_MIN_TEMP, default=DEFAULT_MIN_TEMP): selector.NumberSelector(
@@ -449,10 +476,14 @@ class SmartHeatingOptionsFlow(config_entries.OptionsFlow):
 
         if user_input is not None:
             zone_name = user_input[CONF_ZONE_NAME]
+            heating_type = user_input.get(CONF_HEATING_TYPE, HEATING_TYPE_UNKNOWN)
             temp_entity = user_input[CONF_TEMPERATURE_ENTITY]
             climate_entity = user_input[CONF_CLIMATE_ENTITY]
             humidity_entity = user_input.get(CONF_HUMIDITY_ENTITY)
             power_entity = user_input.get(CONF_POWER_ENTITY)
+            valve_entity = user_input.get(CONF_VALVE_ENTITY)
+            supply_temp_entity = user_input.get(CONF_SUPPLY_TEMP_ENTITY)
+            return_temp_entity = user_input.get(CONF_RETURN_TEMP_ENTITY)
             min_temp = user_input.get(CONF_MIN_TEMP, DEFAULT_MIN_TEMP)
             max_temp = user_input.get(CONF_MAX_TEMP, DEFAULT_MAX_TEMP)
             target_temp = user_input.get(CONF_TARGET_TEMP, DEFAULT_TARGET_TEMP)
@@ -471,10 +502,14 @@ class SmartHeatingOptionsFlow(config_entries.OptionsFlow):
             try:
                 await client.create_zone(
                     name=zone_name,
+                    heating_type=heating_type,
                     temperature_entity_id=temp_entity,
                     climate_entity_id=climate_entity,
                     humidity_entity_id=humidity_entity,
                     power_entity_id=power_entity,
+                    valve_entity_id=valve_entity,
+                    supply_temp_entity_id=supply_temp_entity,
+                    return_temp_entity_id=return_temp_entity,
                     min_temp=min_temp,
                     max_temp=max_temp,
                     target_temp=target_temp,
@@ -493,6 +528,15 @@ class SmartHeatingOptionsFlow(config_entries.OptionsFlow):
             data_schema=vol.Schema(
                 {
                     vol.Required(CONF_ZONE_NAME): str,
+                    vol.Required(CONF_HEATING_TYPE, default=HEATING_TYPE_UNKNOWN): selector.SelectSelector(
+                        selector.SelectSelectorConfig(
+                            options=[
+                                selector.SelectOptionDict(value=ht["value"], label=ht["label"])
+                                for ht in HEATING_TYPES
+                            ],
+                            mode=selector.SelectSelectorMode.DROPDOWN,
+                        )
+                    ),
                     vol.Required(CONF_TEMPERATURE_ENTITY): selector.EntitySelector(
                         selector.EntitySelectorConfig(
                             domain=SENSOR_DOMAIN,
@@ -514,6 +558,23 @@ class SmartHeatingOptionsFlow(config_entries.OptionsFlow):
                         selector.EntitySelectorConfig(
                             domain=SENSOR_DOMAIN,
                             device_class="power",
+                        )
+                    ),
+                    vol.Optional(CONF_VALVE_ENTITY): selector.EntitySelector(
+                        selector.EntitySelectorConfig(
+                            domain=[CLIMATE_DOMAIN, "number"],
+                        )
+                    ),
+                    vol.Optional(CONF_SUPPLY_TEMP_ENTITY): selector.EntitySelector(
+                        selector.EntitySelectorConfig(
+                            domain=SENSOR_DOMAIN,
+                            device_class="temperature",
+                        )
+                    ),
+                    vol.Optional(CONF_RETURN_TEMP_ENTITY): selector.EntitySelector(
+                        selector.EntitySelectorConfig(
+                            domain=SENSOR_DOMAIN,
+                            device_class="temperature",
                         )
                     ),
                     vol.Optional(CONF_MIN_TEMP, default=DEFAULT_MIN_TEMP): selector.NumberSelector(
@@ -610,10 +671,6 @@ class SmartHeatingOptionsFlow(config_entries.OptionsFlow):
             return self.async_abort(reason="zone_not_found")
 
         if user_input is not None:
-            # Check if delete was requested
-            if user_input.get("delete_zone"):
-                return await self.async_step_confirm_delete_zone()
-
             # Update the zone
             session = async_get_clientsession(self.hass)
             client = SmartHeatingAPIClient(
@@ -627,6 +684,10 @@ class SmartHeatingOptionsFlow(config_entries.OptionsFlow):
                 await client.update_zone(
                     zone_id=self._selected_zone_id,
                     name=user_input.get(CONF_ZONE_NAME),
+                    heating_type=user_input.get(CONF_HEATING_TYPE),
+                    valve_entity_id=user_input.get(CONF_VALVE_ENTITY),
+                    supply_temp_entity_id=user_input.get(CONF_SUPPLY_TEMP_ENTITY),
+                    return_temp_entity_id=user_input.get(CONF_RETURN_TEMP_ENTITY),
                     min_temp_c=user_input.get(CONF_MIN_TEMP),
                     max_temp_c=user_input.get(CONF_MAX_TEMP),
                     target_temp_c=user_input.get(CONF_TARGET_TEMP),
@@ -641,6 +702,44 @@ class SmartHeatingOptionsFlow(config_entries.OptionsFlow):
             data_schema=vol.Schema(
                 {
                     vol.Required(CONF_ZONE_NAME, default=zone.get("name", "")): str,
+                    vol.Required(
+                        CONF_HEATING_TYPE,
+                        default=zone.get("heating_type", HEATING_TYPE_UNKNOWN),
+                    ): selector.SelectSelector(
+                        selector.SelectSelectorConfig(
+                            options=[
+                                selector.SelectOptionDict(value=ht["value"], label=ht["label"])
+                                for ht in HEATING_TYPES
+                            ],
+                            mode=selector.SelectSelectorMode.DROPDOWN,
+                        )
+                    ),
+                    vol.Optional(
+                        CONF_VALVE_ENTITY,
+                        default=zone.get("valve_entity_id"),
+                    ): selector.EntitySelector(
+                        selector.EntitySelectorConfig(
+                            domain=[CLIMATE_DOMAIN, "number"],
+                        )
+                    ),
+                    vol.Optional(
+                        CONF_SUPPLY_TEMP_ENTITY,
+                        default=zone.get("supply_temp_entity_id"),
+                    ): selector.EntitySelector(
+                        selector.EntitySelectorConfig(
+                            domain=SENSOR_DOMAIN,
+                            device_class="temperature",
+                        )
+                    ),
+                    vol.Optional(
+                        CONF_RETURN_TEMP_ENTITY,
+                        default=zone.get("return_temp_entity_id"),
+                    ): selector.EntitySelector(
+                        selector.EntitySelectorConfig(
+                            domain=SENSOR_DOMAIN,
+                            device_class="temperature",
+                        )
+                    ),
                     vol.Optional(
                         CONF_MIN_TEMP,
                         default=zone.get("min_temp_c", DEFAULT_MIN_TEMP),
@@ -678,53 +777,10 @@ class SmartHeatingOptionsFlow(config_entries.OptionsFlow):
                         CONF_AUTO_CONTROL,
                         default=zone.get("auto_control_enabled", True),
                     ): bool,
-                    vol.Optional("delete_zone", default=False): bool,
                 }
             ),
             description_placeholders={
                 "zone_name": zone.get("name", "Zone"),
-            },
-        )
-
-    async def async_step_confirm_delete_zone(
-        self,
-        user_input: dict[str, Any] | None = None,
-    ) -> FlowResult:
-        """Confirm zone deletion."""
-        zone = next(
-            (z for z in self._zones if z["id"] == self._selected_zone_id),
-            None,
-        )
-
-        if user_input is not None:
-            if user_input.get("confirm"):
-                # Delete the zone
-                session = async_get_clientsession(self.hass)
-                client = SmartHeatingAPIClient(
-                    api_url=self._config_entry.data[CONF_API_URL],
-                    api_key=self._config_entry.data[CONF_API_KEY],
-                    customer_id=self._config_entry.data[CONF_CUSTOMER_ID],
-                    session=session,
-                )
-
-                try:
-                    await client.delete_zone(self._selected_zone_id)
-                    return self.async_create_entry(title="", data={})
-                except SmartHeatingAPIError as err:
-                    _LOGGER.error("Failed to delete zone: %s", err)
-                    return self.async_abort(reason="delete_failed")
-            else:
-                return await self.async_step_edit_zone()
-
-        return self.async_show_form(
-            step_id="confirm_delete_zone",
-            data_schema=vol.Schema(
-                {
-                    vol.Required("confirm", default=False): bool,
-                }
-            ),
-            description_placeholders={
-                "zone_name": zone.get("name", "Zone") if zone else "Zone",
             },
         )
 

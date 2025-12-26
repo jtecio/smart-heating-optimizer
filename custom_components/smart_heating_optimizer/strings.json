@@ -45,10 +45,14 @@
         "description": "Configure a heating zone (room)",
         "data": {
           "zone_name": "Zone Name",
+          "heating_type": "Heating Type",
           "temperature_entity": "Temperature Sensor",
           "climate_entity": "Thermostat",
           "humidity_entity": "Humidity Sensor",
-          "power_entity": "Power Sensor",
+          "power_entity": "Power Sensor (Electric)",
+          "valve_entity": "Valve/TRV (Hydronic)",
+          "supply_temp_entity": "Supply Water Temp (Hydronic)",
+          "return_temp_entity": "Return Water Temp (Hydronic)",
           "min_temp": "Minimum Temperature",
           "max_temp": "Maximum Temperature",
           "target_temp": "Target Temperature",
@@ -56,10 +60,14 @@
         },
         "data_description": {
           "zone_name": "Name of the room (e.g., 'Living Room')",
+          "heating_type": "Type of heating: Electric, Hydronic (water-based), Mixed, or Auto-detect",
           "temperature_entity": "Temperature sensor in this room",
           "climate_entity": "Thermostat/radiator to control",
           "humidity_entity": "Optional: Humidity sensor in this room",
-          "power_entity": "Optional: Power meter for the heater",
+          "power_entity": "Optional: Power meter for electric heater",
+          "valve_entity": "Optional: TRV or zone valve for hydronic heating",
+          "supply_temp_entity": "Optional: Supply water temperature from boiler/heat pump",
+          "return_temp_entity": "Optional: Return water temperature to boiler/heat pump",
           "min_temp": "Minimum allowed temperature",
           "max_temp": "Maximum allowed temperature",
           "target_temp": "Desired comfort temperature",
@@ -93,10 +101,14 @@
         "description": "Configure a new heating zone",
         "data": {
           "zone_name": "Zone Name",
+          "heating_type": "Heating Type",
           "temperature_entity": "Temperature Sensor",
           "climate_entity": "Thermostat",
           "humidity_entity": "Humidity Sensor",
-          "power_entity": "Power Sensor",
+          "power_entity": "Power Sensor (Electric)",
+          "valve_entity": "Valve/TRV (Hydronic)",
+          "supply_temp_entity": "Supply Water Temp (Hydronic)",
+          "return_temp_entity": "Return Water Temp (Hydronic)",
           "min_temp": "Minimum Temperature",
           "max_temp": "Maximum Temperature",
           "target_temp": "Target Temperature",
@@ -112,21 +124,17 @@
       },
       "edit_zone": {
         "title": "Edit Zone: {zone_name}",
-        "description": "Update zone settings. Check 'Delete Zone' and submit to remove this zone.",
+        "description": "Update zone settings",
         "data": {
           "zone_name": "Zone Name",
+          "heating_type": "Heating Type",
+          "valve_entity": "Valve/TRV (Hydronic)",
+          "supply_temp_entity": "Supply Water Temp (Hydronic)",
+          "return_temp_entity": "Return Water Temp (Hydronic)",
           "min_temp": "Minimum Temperature",
           "max_temp": "Maximum Temperature",
           "target_temp": "Target Temperature",
-          "auto_control": "Enable Automatic Control",
-          "delete_zone": "Delete Zone"
-        }
-      },
-      "confirm_delete_zone": {
-        "title": "Delete Zone: {zone_name}",
-        "description": "Are you sure you want to delete this zone? This action cannot be undone. All historical data for this zone will be preserved.",
-        "data": {
-          "confirm": "Yes, delete this zone"
+          "auto_control": "Enable Automatic Control"
         }
       },
       "settings": {
@@ -144,8 +152,7 @@
     },
     "abort": {
       "no_zones": "No zones configured",
-      "zone_not_found": "Zone not found",
-      "delete_failed": "Failed to delete zone"
+      "zone_not_found": "Zone not found"
     }
   },
   "services": {
@@ -166,24 +173,6 @@
     "send_telemetry": {
       "name": "Send Telemetry",
       "description": "Manually send telemetry data to the IoT Platform"
-    },
-    "boost": {
-      "name": "Boost",
-      "description": "Temporarily increase temperature for comfort",
-      "fields": {
-        "zone_id": {
-          "name": "Zone ID",
-          "description": "Specific zone to boost (leave empty for all zones)"
-        },
-        "duration": {
-          "name": "Duration",
-          "description": "Boost duration in minutes"
-        },
-        "increase": {
-          "name": "Temperature Increase",
-          "description": "Temperature increase in degrees Celsius"
-        }
-      }
     }
   }
 }

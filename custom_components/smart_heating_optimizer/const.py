@@ -14,14 +14,32 @@ CONF_PRICE_AREA: Final = "price_area"
 
 # Zone configuration
 CONF_ZONE_NAME: Final = "zone_name"
+CONF_HEATING_TYPE: Final = "heating_type"
 CONF_TEMPERATURE_ENTITY: Final = "temperature_entity"
 CONF_HUMIDITY_ENTITY: Final = "humidity_entity"
 CONF_CLIMATE_ENTITY: Final = "climate_entity"
 CONF_POWER_ENTITY: Final = "power_entity"
+# Hydronic heating entities
+CONF_VALVE_ENTITY: Final = "valve_entity"
+CONF_SUPPLY_TEMP_ENTITY: Final = "supply_temp_entity"
+CONF_RETURN_TEMP_ENTITY: Final = "return_temp_entity"
 CONF_MIN_TEMP: Final = "min_temp"
 CONF_MAX_TEMP: Final = "max_temp"
 CONF_TARGET_TEMP: Final = "target_temp"
 CONF_AUTO_CONTROL: Final = "auto_control"
+
+# Heating types
+HEATING_TYPE_UNKNOWN: Final = "unknown"
+HEATING_TYPE_ELECTRIC: Final = "electric"
+HEATING_TYPE_HYDRONIC: Final = "hydronic"
+HEATING_TYPE_MIXED: Final = "mixed"
+
+HEATING_TYPES: Final = [
+    {"value": HEATING_TYPE_UNKNOWN, "label": "Auto-detect"},
+    {"value": HEATING_TYPE_ELECTRIC, "label": "Elvärme"},
+    {"value": HEATING_TYPE_HYDRONIC, "label": "Vattenburen"},
+    {"value": HEATING_TYPE_MIXED, "label": "Kombinerad"},
+]
 
 # Default values
 DEFAULT_API_URL: Final = "https://iot.jtec.io/api/v1"
@@ -40,7 +58,7 @@ PRICE_AREAS: Final = [
 ]
 
 # Platforms
-PLATFORMS: Final = ["sensor", "switch", "select", "button", "number"]
+PLATFORMS: Final = ["sensor", "switch"]
 
 # Update intervals
 SCAN_INTERVAL: Final = 60  # seconds for coordinator
@@ -88,9 +106,6 @@ ICON_SAVINGS: Final = "mdi:cash-multiple"
 ICON_STATUS: Final = "mdi:information-outline"
 ICON_ML: Final = "mdi:brain"
 ICON_AUTO: Final = "mdi:robot"
-ICON_PRICE: Final = "mdi:currency-usd"
-ICON_BOOST: Final = "mdi:rocket-launch"
-ICON_MODE: Final = "mdi:tune"
 
 # Attributes
 ATTR_ZONE_ID: Final = "zone_id"
@@ -102,9 +117,3 @@ ATTR_NEXT_SETPOINT_TIME: Final = "next_setpoint_time"
 ATTR_NEXT_SETPOINT_REASON: Final = "next_setpoint_reason"
 ATTR_CURRENT_PRICE: Final = "current_price"
 ATTR_IS_CHEAP_PERIOD: Final = "is_cheap_period"
-ATTR_PRICE_LEVEL: Final = "price_level"
-ATTR_TODAY_AVG_PRICE: Final = "today_avg_price"
-ATTR_TODAY_MIN_PRICE: Final = "today_min_price"
-ATTR_TODAY_MAX_PRICE: Final = "today_max_price"
-ATTR_BOOST_UNTIL: Final = "boost_until"
-ATTR_OPTIMIZATION_MODE: Final = "optimization_mode"

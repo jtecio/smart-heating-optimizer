@@ -20,37 +20,3 @@ trigger_optimization:
 send_telemetry:
   name: Send Telemetry
   description: Manually send telemetry data to the IoT Platform
-
-boost:
-  name: Boost
-  description: Temporarily increase temperature for comfort
-  fields:
-    zone_id:
-      name: Zone ID
-      description: Specific zone to boost (leave empty for all zones)
-      required: false
-      example: "123e4567-e89b-12d3-a456-426614174000"
-      selector:
-        text:
-    duration:
-      name: Duration
-      description: Boost duration in minutes
-      required: false
-      default: 120
-      selector:
-        number:
-          min: 15
-          max: 480
-          step: 15
-          unit_of_measurement: min
-    increase:
-      name: Temperature Increase
-      description: Temperature increase in degrees Celsius
-      required: false
-      default: 2.0
-      selector:
-        number:
-          min: 0.5
-          max: 5.0
-          step: 0.5
-          unit_of_measurement: °C
