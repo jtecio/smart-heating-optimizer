@@ -15,6 +15,7 @@ from homeassistant.helpers.event import async_track_time_interval
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator, UpdateFailed
 
 from .api_client import SmartHeatingAPIClient, SmartHeatingAPIError
+from .mqtt_handler import SmartHeatingMQTTHandler, SetpointCommand
 from .const import (
     CONF_API_KEY,
     CONF_API_URL,
@@ -68,6 +69,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     # Start telemetry sender
     coordinator.start_telemetry_sender()
 
+    # Start MQTT handler for receiving setpoints
+    await coordinator.async_start_mqtt_handler()
+
     # Register services
     await async_setup_services(hass)
 
@@ -76,10 +80,11 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Unload a config entry."""
-    # Stop telemetry sender
+    # Stop telemetry sender and MQTT handler
     if entry.entry_id in hass.data[DOMAIN]:
         coordinator = hass.data[DOMAIN][entry.entry_id]["coordinator"]
         coordinator.stop_telemetry_sender()
+        await coordinator.async_stop_mqtt_handler()
 
     # Unload platforms
     if unload_ok := await hass.config_entries.async_unload_platforms(entry, PLATFORMS):
@@ -148,6 +153,7 @@ class SmartHeatingCoordinator(DataUpdateCoordinator):
         self._zones: list[dict[str, Any]] = []
         self._installation: dict[str, Any] = {}
         self._dashboard: dict[str, Any] = {}
+        self._mqtt_handler: SmartHeatingMQTTHandler | None = None
 
     @property
     def zones(self) -> list[dict[str, Any]]:
@@ -211,6 +217,68 @@ class SmartHeatingCoordinator(DataUpdateCoordinator):
         if self._telemetry_unsub is not None:
             self._telemetry_unsub()
             self._telemetry_unsub = None
+
+    async def async_start_mqtt_handler(self) -> None:
+        """Start the MQTT handler for receiving setpoints."""
+        installation_id = self.entry.data.get(CONF_INSTALLATION_ID)
+        if not installation_id:
+            _LOGGER.warning("No installation ID, cannot start MQTT handler")
+            return
+
+        # Build zones dict for MQTT handler
+        zones_dict = {}
+        for zone in self._zones:
+            zone_id = zone.get("id")
+            if zone_id:
+                zones_dict[zone_id] = {
+                    "climate_entity_id": zone.get("climate_entity_id"),
+                    "auto_control": zone.get("auto_control_enabled", True),
+                }
+
+        self._mqtt_handler = SmartHeatingMQTTHandler(
+            hass=self.hass,
+            installation_id=installation_id,
+            zones=zones_dict,
+            on_setpoint_callback=self._on_setpoint_applied,
+        )
+
+        if await self._mqtt_handler.async_subscribe():
+            _LOGGER.info("MQTT handler started for installation %s", installation_id)
+        else:
+            _LOGGER.warning("MQTT handler could not subscribe (MQTT not available)")
+
+    async def async_stop_mqtt_handler(self) -> None:
+        """Stop the MQTT handler."""
+        if self._mqtt_handler:
+            await self._mqtt_handler.async_unsubscribe()
+            self._mqtt_handler = None
+            _LOGGER.info("MQTT handler stopped")
+
+    def _on_setpoint_applied(self, zone_id: str, setpoint: SetpointCommand) -> None:
+        """Callback when a setpoint is applied."""
+        _LOGGER.info(
+            "Setpoint applied for zone %s: %.1f°C (reason: %s)",
+            zone_id,
+            setpoint.temperature_c,
+            setpoint.reason,
+        )
+
+    @property
+    def mqtt_handler(self) -> SmartHeatingMQTTHandler | None:
+        """Return the MQTT handler."""
+        return self._mqtt_handler
+
+    def get_pending_setpoint(self, zone_id: str) -> SetpointCommand | None:
+        """Get pending setpoint for a zone."""
+        if self._mqtt_handler:
+            return self._mqtt_handler.get_pending_setpoint(zone_id)
+        return None
+
+    def get_applied_setpoint(self, zone_id: str) -> SetpointCommand | None:
+        """Get last applied setpoint for a zone."""
+        if self._mqtt_handler:
+            return self._mqtt_handler.get_applied_setpoint(zone_id)
+        return None
 
     async def async_send_telemetry(self) -> None:
         """Send telemetry data to the IoT Platform."""
