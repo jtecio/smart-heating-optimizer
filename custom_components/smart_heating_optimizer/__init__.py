@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from homeassistant.config_entries import ConfigEntry
@@ -107,8 +107,14 @@ async def async_setup_services(hass: HomeAssistant) -> None:
     async def handle_send_telemetry(call) -> None:
         """Handle manual telemetry send."""
         for entry_id, entry_data in hass.data[DOMAIN].items():
-            coordinator = entry_data["coordinator"]
-            await coordinator.async_send_telemetry()
+            coordinator = entry_data.get("coordinator")
+            if coordinator is None:
+                _LOGGER.warning("No coordinator found for entry %s", entry_id)
+                continue
+            try:
+                await coordinator.async_send_telemetry()
+            except Exception as err:
+                _LOGGER.error("Failed to send telemetry for entry %s: %s", entry_id, err)
 
     # Register services if not already registered
     if not hass.services.has_service(DOMAIN, "trigger_optimization"):
@@ -260,69 +266,92 @@ class SmartHeatingCoordinator(DataUpdateCoordinator):
         zone: dict[str, Any],
         outdoor_temp: float | None,
     ) -> dict[str, Any] | None:
-        """Collect telemetry for a single zone."""
-        zone_id = zone.get("id")
-        temp_entity_id = zone.get("temperature_entity_id")
-        climate_entity_id = zone.get("climate_entity_id")
-        humidity_entity_id = zone.get("humidity_entity_id")
-        power_entity_id = zone.get("power_entity_id")
+        """Collect telemetry for a single zone.
 
-        if not temp_entity_id:
-            return None
-
-        # Get temperature
-        temp_state = self.hass.states.get(temp_entity_id)
-        if not temp_state or temp_state.state in ("unknown", "unavailable"):
-            return None
-
+        Returns telemetry dict if temperature is available, None otherwise.
+        Gracefully handles unavailable entities.
+        """
         try:
-            indoor_temp = float(temp_state.state)
-        except ValueError:
-            return None
+            zone_id = zone.get("id")
+            temp_entity_id = zone.get("temperature_entity_id")
+            climate_entity_id = zone.get("climate_entity_id")
+            humidity_entity_id = zone.get("humidity_entity_id")
+            power_entity_id = zone.get("power_entity_id")
 
-        telemetry = {
-            "zone_id": zone_id,
-            "timestamp": datetime.utcnow().isoformat() + "Z",
-            "indoor_temp_c": indoor_temp,
-        }
+            if not temp_entity_id:
+                _LOGGER.debug("Zone %s has no temperature entity configured", zone_id)
+                return None
 
-        # Add outdoor temp if available
-        if outdoor_temp is not None:
-            telemetry["outdoor_temp_c"] = outdoor_temp
+            # Get temperature - this is required
+            temp_state = self.hass.states.get(temp_entity_id)
+            if not temp_state or temp_state.state in ("unknown", "unavailable"):
+                _LOGGER.debug(
+                    "Temperature entity %s is unavailable for zone %s",
+                    temp_entity_id, zone_id
+                )
+                return None
 
-        # Get humidity if available
-        if humidity_entity_id:
-            humidity_state = self.hass.states.get(humidity_entity_id)
-            if humidity_state and humidity_state.state not in ("unknown", "unavailable"):
-                try:
-                    telemetry["humidity_pct"] = float(humidity_state.state)
-                except ValueError:
-                    pass
+            try:
+                indoor_temp = float(temp_state.state)
+            except (ValueError, TypeError) as err:
+                _LOGGER.debug(
+                    "Could not parse temperature from %s: %s",
+                    temp_entity_id, err
+                )
+                return None
 
-        # Get climate state
-        if climate_entity_id:
-            climate_state = self.hass.states.get(climate_entity_id)
-            if climate_state:
-                # Check if heating
-                hvac_action = climate_state.attributes.get("hvac_action")
-                if hvac_action:
-                    telemetry["heating_active"] = hvac_action == "heating"
+            # Use timezone-aware UTC datetime
+            telemetry = {
+                "zone_id": zone_id,
+                "timestamp": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+                "indoor_temp_c": indoor_temp,
+            }
 
-                # Get current setpoint
-                current_temp = climate_state.attributes.get("temperature")
-                if current_temp is not None:
+            # Add outdoor temp if available
+            if outdoor_temp is not None:
+                telemetry["outdoor_temp_c"] = outdoor_temp
+
+            # Get humidity if available (optional)
+            if humidity_entity_id:
+                humidity_state = self.hass.states.get(humidity_entity_id)
+                if humidity_state and humidity_state.state not in ("unknown", "unavailable"):
                     try:
-                        telemetry["thermostat_setpoint_c"] = float(current_temp)
-                    except ValueError:
+                        telemetry["humidity_pct"] = float(humidity_state.state)
+                    except (ValueError, TypeError):
                         pass
 
-        # Get power if available
-        if power_entity_id:
-            power_state = self.hass.states.get(power_entity_id)
-            if power_state and power_state.state not in ("unknown", "unavailable"):
-                try:
-                    telemetry["heating_power_w"] = float(power_state.state)
-                except ValueError:
-                    pass
+            # Get climate state if available (optional)
+            # Climate being unavailable should NOT prevent telemetry from being sent
+            if climate_entity_id:
+                climate_state = self.hass.states.get(climate_entity_id)
+                if climate_state and climate_state.state not in ("unknown", "unavailable"):
+                    # Check if heating
+                    hvac_action = climate_state.attributes.get("hvac_action")
+                    if hvac_action:
+                        telemetry["heating_active"] = hvac_action == "heating"
 
-        return telemetry
+                    # Get current setpoint
+                    current_temp = climate_state.attributes.get("temperature")
+                    if current_temp is not None:
+                        try:
+                            telemetry["thermostat_setpoint_c"] = float(current_temp)
+                        except (ValueError, TypeError):
+                            pass
+
+            # Get power if available (optional)
+            if power_entity_id:
+                power_state = self.hass.states.get(power_entity_id)
+                if power_state and power_state.state not in ("unknown", "unavailable"):
+                    try:
+                        telemetry["heating_power_w"] = float(power_state.state)
+                    except (ValueError, TypeError):
+                        pass
+
+            return telemetry
+
+        except Exception as err:
+            _LOGGER.error(
+                "Unexpected error collecting telemetry for zone %s: %s",
+                zone.get("id", "unknown"), err
+            )
+            return None
