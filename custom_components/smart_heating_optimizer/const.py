@@ -58,7 +58,7 @@ PRICE_AREAS: Final = [
 ]
 
 # Platforms
-PLATFORMS: Final = ["sensor", "switch"]
+PLATFORMS: Final = ["sensor", "switch", "select", "button", "number"]
 
 # Update intervals
 SCAN_INTERVAL: Final = 60  # seconds for coordinator
@@ -106,10 +106,13 @@ ICON_SAVINGS: Final = "mdi:cash-multiple"
 ICON_STATUS: Final = "mdi:information-outline"
 ICON_ML: Final = "mdi:brain"
 ICON_AUTO: Final = "mdi:robot"
+ICON_MODE: Final = "mdi:tune"
+ICON_BOOST: Final = "mdi:rocket-launch"
 
 # Attributes
 ATTR_ZONE_ID: Final = "zone_id"
 ATTR_INSTALLATION_ID: Final = "installation_id"
+ATTR_BOOST_UNTIL: Final = "boost_until"
 ATTR_ML_STATUS: Final = "ml_status"
 ATTR_OBSERVATIONS_NEEDED: Final = "observations_needed"
 ATTR_NEXT_SETPOINT: Final = "next_setpoint"
