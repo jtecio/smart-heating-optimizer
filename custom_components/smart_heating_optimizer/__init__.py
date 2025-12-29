@@ -25,17 +25,12 @@ from .const import (
     PLATFORMS,
     SCAN_INTERVAL,
     TELEMETRY_INTERVAL,
+    SETPOINT_POLL_INTERVAL,
 )
 
 _LOGGER = logging.getLogger(__name__)
 
-PLATFORMS: list[Platform] = [
-    Platform.SENSOR,
-    Platform.SWITCH,
-    Platform.SELECT,
-    Platform.BUTTON,
-    Platform.NUMBER,
-]
+PLATFORMS: list[Platform] = [Platform.SENSOR, Platform.SWITCH]
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
@@ -157,6 +152,8 @@ class SmartHeatingCoordinator(DataUpdateCoordinator):
         self.client = client
         self.entry = entry
         self._telemetry_unsub = None
+        self._setpoint_unsub = None
+        self._next_setpoint_poll: int = SETPOINT_POLL_INTERVAL
         self._zones: list[dict[str, Any]] = []
         self._installation: dict[str, Any] = {}
         self._dashboard: dict[str, Any] = {}
@@ -200,7 +197,7 @@ class SmartHeatingCoordinator(DataUpdateCoordinator):
             raise UpdateFailed(f"Error communicating with API: {err}") from err
 
     def start_telemetry_sender(self) -> None:
-        """Start the telemetry sender."""
+        """Start the telemetry sender and setpoint poller."""
         if self._telemetry_unsub is not None:
             return
 
@@ -218,11 +215,36 @@ class SmartHeatingCoordinator(DataUpdateCoordinator):
         # Send initial telemetry
         self.hass.async_create_task(self.async_send_telemetry())
 
+        # Start setpoint poller
+        self._start_setpoint_poller()
+
+    def _start_setpoint_poller(self) -> None:
+        """Start polling for setpoint commands."""
+        if self._setpoint_unsub is not None:
+            return
+
+        @callback
+        def _poll_setpoints_callback(now: datetime) -> None:
+            """Poll for pending setpoints."""
+            self.hass.async_create_task(self.async_poll_and_apply_setpoints())
+
+        self._setpoint_unsub = async_track_time_interval(
+            self.hass,
+            _poll_setpoints_callback,
+            timedelta(seconds=self._next_setpoint_poll),
+        )
+
+        # Poll immediately on startup
+        self.hass.async_create_task(self.async_poll_and_apply_setpoints())
+
     def stop_telemetry_sender(self) -> None:
-        """Stop the telemetry sender."""
+        """Stop the telemetry sender and setpoint poller."""
         if self._telemetry_unsub is not None:
             self._telemetry_unsub()
             self._telemetry_unsub = None
+        if self._setpoint_unsub is not None:
+            self._setpoint_unsub()
+            self._setpoint_unsub = None
 
     async def async_send_telemetry(self) -> None:
         """Send telemetry data to the IoT Platform."""
@@ -266,6 +288,96 @@ class SmartHeatingCoordinator(DataUpdateCoordinator):
             )
         except SmartHeatingAPIError as err:
             _LOGGER.error("Failed to send telemetry: %s", err)
+
+    async def async_poll_and_apply_setpoints(self) -> None:
+        """Poll for pending setpoint commands and apply them to thermostats."""
+        try:
+            result = await self.client.get_pending_setpoints()
+            commands = result.get("commands", [])
+            next_poll = result.get("next_poll_seconds", 60)
+
+            # Update polling interval if server suggests different
+            if next_poll != self._next_setpoint_poll:
+                self._next_setpoint_poll = next_poll
+                _LOGGER.debug("Updated setpoint poll interval to %s seconds", next_poll)
+
+            if not commands:
+                _LOGGER.debug("No pending setpoint commands")
+                return
+
+            _LOGGER.info("Received %s pending setpoint command(s)", len(commands))
+
+            for cmd in commands:
+                await self._apply_setpoint_command(cmd)
+
+        except SmartHeatingAPIError as err:
+            _LOGGER.error("Failed to poll setpoints: %s", err)
+        except Exception as err:
+            _LOGGER.error("Unexpected error polling setpoints: %s", err)
+
+    async def _apply_setpoint_command(self, command: dict[str, Any]) -> None:
+        """Apply a single setpoint command to the thermostat."""
+        command_id = command.get("command_id")
+        climate_entity_id = command.get("climate_entity_id")
+        target_temp = command.get("target_temp_c")
+        zone_name = command.get("zone_name", "Unknown")
+        reason = command.get("reason", "optimization")
+
+        if not climate_entity_id or target_temp is None:
+            _LOGGER.warning("Invalid setpoint command: missing entity or temperature")
+            return
+
+        try:
+            _LOGGER.info(
+                "Applying setpoint for %s: %.1f°C (%s) via %s",
+                zone_name, target_temp, reason, climate_entity_id
+            )
+
+            # Call climate.set_temperature service
+            await self.hass.services.async_call(
+                "climate",
+                "set_temperature",
+                {
+                    "entity_id": climate_entity_id,
+                    "temperature": target_temp,
+                },
+                blocking=True,
+            )
+
+            # Get the new state to confirm
+            climate_state = self.hass.states.get(climate_entity_id)
+            actual_temp = None
+            if climate_state:
+                actual_temp = climate_state.attributes.get("temperature")
+
+            # Acknowledge success to backend
+            await self.client.acknowledge_setpoint(
+                command_id=command_id,
+                applied=True,
+                actual_temp_c=actual_temp,
+            )
+
+            _LOGGER.info(
+                "Setpoint applied successfully for %s: %.1f°C",
+                zone_name, target_temp
+            )
+
+        except Exception as err:
+            error_msg = str(err)
+            _LOGGER.error(
+                "Failed to apply setpoint for %s: %s",
+                zone_name, error_msg
+            )
+
+            # Acknowledge failure to backend
+            try:
+                await self.client.acknowledge_setpoint(
+                    command_id=command_id,
+                    applied=False,
+                    error_message=error_msg,
+                )
+            except Exception as ack_err:
+                _LOGGER.error("Failed to acknowledge setpoint failure: %s", ack_err)
 
     async def _collect_zone_telemetry(
         self,

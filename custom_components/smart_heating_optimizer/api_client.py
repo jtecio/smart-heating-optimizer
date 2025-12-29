@@ -305,6 +305,29 @@ class SmartHeatingAPIClient:
         """Get dashboard summary."""
         return await self._request("GET", API_DASHBOARD)
 
+    async def get_pending_setpoints(self) -> dict[str, Any]:
+        """Get pending setpoint commands to apply."""
+        return await self._request("GET", "/ha-integration/setpoints/pending")
+
+    async def acknowledge_setpoint(
+        self,
+        command_id: str,
+        applied: bool = True,
+        actual_temp_c: float | None = None,
+        error_message: str | None = None,
+    ) -> dict[str, Any]:
+        """Acknowledge that a setpoint was applied (or failed)."""
+        data = {
+            "command_id": command_id,
+            "applied": applied,
+            "actual_temp_c": actual_temp_c,
+            "error_message": error_message,
+        }
+        # Remove None values
+        data = {k: v for k, v in data.items() if v is not None}
+
+        return await self._request("POST", "/ha-integration/setpoints/acknowledge", data=data)
+
     async def close(self) -> None:
         """Close the session."""
         if self._session:

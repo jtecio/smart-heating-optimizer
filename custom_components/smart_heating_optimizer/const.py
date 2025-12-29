@@ -58,11 +58,12 @@ PRICE_AREAS: Final = [
 ]
 
 # Platforms
-PLATFORMS: Final = ["sensor", "switch", "select", "button", "number"]
+PLATFORMS: Final = ["sensor", "switch"]
 
 # Update intervals
 SCAN_INTERVAL: Final = 60  # seconds for coordinator
 TELEMETRY_INTERVAL: Final = 300  # seconds between telemetry sends
+SETPOINT_POLL_INTERVAL: Final = 60  # seconds between setpoint polling
 
 # MQTT topics (relative to installation)
 MQTT_TOPIC_SETPOINT: Final = "ha/{installation_id}/zone/{zone_id}/setpoint"
@@ -106,13 +107,10 @@ ICON_SAVINGS: Final = "mdi:cash-multiple"
 ICON_STATUS: Final = "mdi:information-outline"
 ICON_ML: Final = "mdi:brain"
 ICON_AUTO: Final = "mdi:robot"
-ICON_MODE: Final = "mdi:tune"
-ICON_BOOST: Final = "mdi:rocket-launch"
 
 # Attributes
 ATTR_ZONE_ID: Final = "zone_id"
 ATTR_INSTALLATION_ID: Final = "installation_id"
-ATTR_BOOST_UNTIL: Final = "boost_until"
 ATTR_ML_STATUS: Final = "ml_status"
 ATTR_OBSERVATIONS_NEEDED: Final = "observations_needed"
 ATTR_NEXT_SETPOINT: Final = "next_setpoint"
