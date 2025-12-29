@@ -30,12 +30,10 @@ from .const import (
 
 _LOGGER = logging.getLogger(__name__)
 
+# Note: SELECT, BUTTON, NUMBER temporarily disabled - need coordinator methods
 PLATFORMS: list[Platform] = [
     Platform.SENSOR,
     Platform.SWITCH,
-    Platform.SELECT,
-    Platform.BUTTON,
-    Platform.NUMBER,
 ]
 
 
