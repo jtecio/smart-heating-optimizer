@@ -18,6 +18,8 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from . import SmartHeatingCoordinator
+from homeassistant.const import UnitOfTemperature
+
 from .const import (
     ATTR_CURRENT_PRICE,
     ATTR_IS_CHEAP_PERIOD,
@@ -31,6 +33,7 @@ from .const import (
     ICON_ML,
     ICON_SAVINGS,
     ICON_STATUS,
+    ICON_VACATION,
 )
 
 
@@ -48,6 +51,11 @@ async def async_setup_entry(
     entities.append(InstallationStatusSensor(coordinator, entry))
     entities.append(InstallationSavingsTodaySensor(coordinator, entry))
     entities.append(InstallationSavingsTotalSensor(coordinator, entry))
+
+    # Add vacation mode sensors
+    entities.append(VacationStartSensor(coordinator, entry))
+    entities.append(VacationEndSensor(coordinator, entry))
+    entities.append(VacationTempSensor(coordinator, entry))
 
     # Add zone-level sensors
     for zone in coordinator.zones:
@@ -370,3 +378,101 @@ class ZoneObservationsSensor(ZoneBaseSensor):
             ATTR_OBSERVATIONS_NEEDED: needed,
             ATTR_ML_STATUS: zone.get("status", "unknown"),
         }
+
+
+class VacationStartSensor(SmartHeatingBaseSensor):
+    """Sensor for vacation start date."""
+
+    _attr_icon = ICON_VACATION
+    _attr_device_class = SensorDeviceClass.DATE
+
+    def __init__(
+        self,
+        coordinator: SmartHeatingCoordinator,
+        entry: ConfigEntry,
+    ) -> None:
+        """Initialize the sensor."""
+        super().__init__(coordinator, entry)
+        self._attr_unique_id = f"{entry.entry_id}_vacation_start"
+        self._attr_name = "Semester Start"
+
+    @property
+    def native_value(self) -> str | None:
+        """Return the state."""
+        installation = self.coordinator.installation
+        return installation.get("vacation_start_date")
+
+    @property
+    def available(self) -> bool:
+        """Return if entity is available."""
+        installation = self.coordinator.installation
+        return installation.get("vacation_mode_enabled", False)
+
+
+class VacationEndSensor(SmartHeatingBaseSensor):
+    """Sensor for vacation end date."""
+
+    _attr_icon = ICON_VACATION
+    _attr_device_class = SensorDeviceClass.DATE
+
+    def __init__(
+        self,
+        coordinator: SmartHeatingCoordinator,
+        entry: ConfigEntry,
+    ) -> None:
+        """Initialize the sensor."""
+        super().__init__(coordinator, entry)
+        self._attr_unique_id = f"{entry.entry_id}_vacation_end"
+        self._attr_name = "Semester Slut"
+
+    @property
+    def native_value(self) -> str | None:
+        """Return the state."""
+        installation = self.coordinator.installation
+        return installation.get("vacation_end_date")
+
+    @property
+    def available(self) -> bool:
+        """Return if entity is available."""
+        installation = self.coordinator.installation
+        return installation.get("vacation_mode_enabled", False)
+
+
+class VacationTempSensor(SmartHeatingBaseSensor):
+    """Sensor for vacation target temperature."""
+
+    _attr_icon = ICON_VACATION
+    _attr_device_class = SensorDeviceClass.TEMPERATURE
+    _attr_native_unit_of_measurement = UnitOfTemperature.CELSIUS
+    _attr_state_class = SensorStateClass.MEASUREMENT
+
+    def __init__(
+        self,
+        coordinator: SmartHeatingCoordinator,
+        entry: ConfigEntry,
+    ) -> None:
+        """Initialize the sensor."""
+        super().__init__(coordinator, entry)
+        self._attr_unique_id = f"{entry.entry_id}_vacation_temp"
+        self._attr_name = "Semester Temperatur"
+
+    @property
+    def native_value(self) -> float | None:
+        """Return the state."""
+        installation = self.coordinator.installation
+        return installation.get("vacation_target_temp_c", 15.0)
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        """Return extra attributes."""
+        installation = self.coordinator.installation
+        return {
+            "pre_heat_hours": installation.get("vacation_pre_heat_hours", 4),
+            "vacation_enabled": installation.get("vacation_mode_enabled", False),
+        }
+
+    @property
+    def available(self) -> bool:
+        """Return if entity is available."""
+        installation = self.coordinator.installation
+        return installation.get("vacation_mode_enabled", False)

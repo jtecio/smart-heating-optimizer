@@ -20,6 +20,7 @@ from .const import (
     CONF_CUSTOMER_ID,
     DOMAIN,
     ICON_AUTO,
+    ICON_VACATION,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -35,6 +36,9 @@ async def async_setup_entry(
     client = hass.data[DOMAIN][entry.entry_id]["client"]
 
     entities: list[SwitchEntity] = []
+
+    # Add installation-level vacation mode switch
+    entities.append(VacationModeSwitch(coordinator, entry, client))
 
     # Add auto-control switch for each zone
     for zone in coordinator.zones:
@@ -105,3 +109,74 @@ class ZoneAutoControlSwitch(CoordinatorEntity, SwitchEntity):
             await self.coordinator.async_request_refresh()
         except SmartHeatingAPIError as err:
             _LOGGER.error("Failed to update auto-control: %s", err)
+
+
+class VacationModeSwitch(CoordinatorEntity, SwitchEntity):
+    """Switch for vacation mode (installation-level)."""
+
+    _attr_has_entity_name = True
+    _attr_icon = ICON_VACATION
+
+    def __init__(
+        self,
+        coordinator: SmartHeatingCoordinator,
+        entry: ConfigEntry,
+        client: SmartHeatingAPIClient,
+    ) -> None:
+        """Initialize the switch."""
+        super().__init__(coordinator)
+        self._entry = entry
+        self._client = client
+        self._attr_unique_id = f"{entry.entry_id}_vacation_mode"
+        self._attr_name = "Semesterläge"
+        self._attr_device_info = DeviceInfo(
+            identifiers={(DOMAIN, entry.entry_id)},
+            name="Smart Heating Optimizer",
+            manufacturer="JTEC",
+            model="Smart Heating System",
+            sw_version="1.3.0",
+        )
+
+    @property
+    def is_on(self) -> bool:
+        """Return true if vacation mode is enabled."""
+        installation = self.coordinator.installation
+        return installation.get("vacation_mode_enabled", False)
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        """Return extra state attributes."""
+        installation = self.coordinator.installation
+        return {
+            "start_date": installation.get("vacation_start_date"),
+            "end_date": installation.get("vacation_end_date"),
+            "target_temp_c": installation.get("vacation_target_temp_c", 15.0),
+            "pre_heat_hours": installation.get("vacation_pre_heat_hours", 4),
+        }
+
+    async def async_turn_on(self, **kwargs: Any) -> None:
+        """Turn on vacation mode."""
+        await self._set_vacation_mode(True)
+
+    async def async_turn_off(self, **kwargs: Any) -> None:
+        """Turn off vacation mode."""
+        await self._set_vacation_mode(False)
+
+    async def _set_vacation_mode(self, enabled: bool) -> None:
+        """Set vacation mode state.
+
+        When enabling, uses existing dates if set, otherwise defaults.
+        """
+        try:
+            installation = self.coordinator.installation
+            await self._client.update_vacation_mode(
+                enabled=enabled,
+                start_date=installation.get("vacation_start_date"),
+                end_date=installation.get("vacation_end_date"),
+                target_temp_c=installation.get("vacation_target_temp_c", 15.0),
+                pre_heat_hours=installation.get("vacation_pre_heat_hours", 4),
+            )
+            # Refresh coordinator data
+            await self.coordinator.async_request_refresh()
+        except SmartHeatingAPIError as err:
+            _LOGGER.error("Failed to update vacation mode: %s", err)

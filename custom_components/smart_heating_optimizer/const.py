@@ -76,6 +76,7 @@ API_ZONES: Final = "/ha-integration/zones"
 API_TELEMETRY: Final = "/ha-integration/telemetry"
 API_OPTIMIZE: Final = "/ha-integration/optimize"
 API_DASHBOARD: Final = "/ha-integration/dashboard"
+API_VACATION: Final = "/ha-integration/installation/vacation"
 
 # Zone statuses
 STATUS_INITIALIZING: Final = "initializing"
@@ -97,9 +98,13 @@ SENSOR_SAVINGS_TOTAL: Final = "savings_total"
 SENSOR_NEXT_CHANGE: Final = "next_change"
 SENSOR_ML_ACCURACY: Final = "ml_accuracy"
 SENSOR_OBSERVATIONS: Final = "observations"
+SENSOR_VACATION_START: Final = "vacation_start"
+SENSOR_VACATION_END: Final = "vacation_end"
+SENSOR_VACATION_TEMP: Final = "vacation_temp"
 
 # Switch entity descriptions
 SWITCH_AUTO_CONTROL: Final = "auto_control"
+SWITCH_VACATION_MODE: Final = "vacation_mode"
 
 # Icons
 ICON_HEATING: Final = "mdi:radiator"
@@ -111,6 +116,7 @@ ICON_MODE: Final = "mdi:tune"
 ICON_TRIGGER: Final = "mdi:play-circle"
 ICON_TEMP: Final = "mdi:thermometer"
 ICON_BOOST: Final = "mdi:rocket-launch"
+ICON_VACATION: Final = "mdi:beach"
 
 # Attributes
 ATTR_ZONE_ID: Final = "zone_id"

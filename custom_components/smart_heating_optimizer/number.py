@@ -18,6 +18,7 @@ from .api_client import SmartHeatingAPIClient, SmartHeatingAPIError
 from .const import (
     DOMAIN,
     ICON_HEATING,
+    ICON_VACATION,
 )
 
 _LOGGER = logging.getLogger(__name__)
@@ -33,6 +34,12 @@ async def async_setup_entry(
     client = hass.data[DOMAIN][entry.entry_id]["client"]
 
     entities: list[NumberEntity] = []
+
+    # Add installation-level vacation mode numbers
+    entities.extend([
+        VacationTargetTempNumber(coordinator, entry, client),
+        VacationPreHeatHoursNumber(coordinator, entry, client),
+    ])
 
     # Add temperature control numbers for each zone
     for zone in coordinator.zones:
@@ -179,3 +186,109 @@ class ZoneTargetTempNumber(ZoneTemperatureNumber):
     async def async_set_native_value(self, value: float) -> None:
         """Set the value."""
         await self._update_zone_temp(target_temp_c=value)
+
+
+class VacationTargetTempNumber(CoordinatorEntity, NumberEntity):
+    """Number entity for vacation target temperature."""
+
+    _attr_has_entity_name = True
+    _attr_icon = ICON_VACATION
+    _attr_native_unit_of_measurement = UnitOfTemperature.CELSIUS
+    _attr_mode = NumberMode.SLIDER
+    _attr_native_min_value = 10.0
+    _attr_native_max_value = 20.0
+    _attr_native_step = 0.5
+
+    def __init__(
+        self,
+        coordinator: SmartHeatingCoordinator,
+        entry: ConfigEntry,
+        client: SmartHeatingAPIClient,
+    ) -> None:
+        """Initialize the number entity."""
+        super().__init__(coordinator)
+        self._entry = entry
+        self._client = client
+        self._attr_unique_id = f"{entry.entry_id}_vacation_target_temp"
+        self._attr_name = "Semester Måltemperatur"
+        self._attr_device_info = DeviceInfo(
+            identifiers={(DOMAIN, entry.entry_id)},
+            name="Smart Heating Optimizer",
+            manufacturer="JTEC",
+            model="Smart Heating System",
+            sw_version="1.3.0",
+        )
+
+    @property
+    def native_value(self) -> float | None:
+        """Return the current value."""
+        installation = self.coordinator.installation
+        return installation.get("vacation_target_temp_c", 15.0)
+
+    async def async_set_native_value(self, value: float) -> None:
+        """Set the value."""
+        try:
+            installation = self.coordinator.installation
+            await self._client.update_vacation_mode(
+                enabled=installation.get("vacation_mode_enabled", False),
+                start_date=installation.get("vacation_start_date"),
+                end_date=installation.get("vacation_end_date"),
+                target_temp_c=value,
+                pre_heat_hours=installation.get("vacation_pre_heat_hours", 4),
+            )
+            await self.coordinator.async_request_refresh()
+        except SmartHeatingAPIError as err:
+            _LOGGER.error("Failed to update vacation target temp: %s", err)
+
+
+class VacationPreHeatHoursNumber(CoordinatorEntity, NumberEntity):
+    """Number entity for vacation pre-heat hours."""
+
+    _attr_has_entity_name = True
+    _attr_icon = ICON_VACATION
+    _attr_native_unit_of_measurement = "h"
+    _attr_mode = NumberMode.BOX
+    _attr_native_min_value = 1
+    _attr_native_max_value = 24
+    _attr_native_step = 1
+
+    def __init__(
+        self,
+        coordinator: SmartHeatingCoordinator,
+        entry: ConfigEntry,
+        client: SmartHeatingAPIClient,
+    ) -> None:
+        """Initialize the number entity."""
+        super().__init__(coordinator)
+        self._entry = entry
+        self._client = client
+        self._attr_unique_id = f"{entry.entry_id}_vacation_pre_heat_hours"
+        self._attr_name = "Semester Förvärmning"
+        self._attr_device_info = DeviceInfo(
+            identifiers={(DOMAIN, entry.entry_id)},
+            name="Smart Heating Optimizer",
+            manufacturer="JTEC",
+            model="Smart Heating System",
+            sw_version="1.3.0",
+        )
+
+    @property
+    def native_value(self) -> int | None:
+        """Return the current value."""
+        installation = self.coordinator.installation
+        return installation.get("vacation_pre_heat_hours", 4)
+
+    async def async_set_native_value(self, value: float) -> None:
+        """Set the value."""
+        try:
+            installation = self.coordinator.installation
+            await self._client.update_vacation_mode(
+                enabled=installation.get("vacation_mode_enabled", False),
+                start_date=installation.get("vacation_start_date"),
+                end_date=installation.get("vacation_end_date"),
+                target_temp_c=installation.get("vacation_target_temp_c", 15.0),
+                pre_heat_hours=int(value),
+            )
+            await self.coordinator.async_request_refresh()
+        except SmartHeatingAPIError as err:
+            _LOGGER.error("Failed to update vacation pre-heat hours: %s", err)

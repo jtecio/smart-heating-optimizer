@@ -30,10 +30,11 @@ from .const import (
 
 _LOGGER = logging.getLogger(__name__)
 
-# Note: SELECT, BUTTON, NUMBER temporarily disabled - need coordinator methods
+# Note: SELECT, BUTTON temporarily disabled - need coordinator methods
 PLATFORMS: list[Platform] = [
     Platform.SENSOR,
     Platform.SWITCH,
+    Platform.NUMBER,
 ]
 
 
@@ -283,7 +284,7 @@ class SmartHeatingCoordinator(DataUpdateCoordinator):
                 zones=zone_telemetry,
                 outdoor_temp=outdoor_temp,
                 ha_version=HA_VERSION,
-                component_version="1.2.4",
+                component_version="1.3.0",
             )
             _LOGGER.debug(
                 "Telemetry sent: accepted=%s, rejected=%s",

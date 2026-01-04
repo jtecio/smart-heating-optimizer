@@ -16,6 +16,7 @@ from .const import (
     API_OPTIMIZE,
     API_REGISTER,
     API_TELEMETRY,
+    API_VACATION,
     API_ZONES,
 )
 
@@ -327,6 +328,74 @@ class SmartHeatingAPIClient:
         data = {k: v for k, v in data.items() if v is not None}
 
         return await self._request("POST", "/ha-integration/setpoints/acknowledge", data=data)
+
+    async def get_vacation_mode(self) -> dict[str, Any]:
+        """Get current vacation mode settings.
+
+        Returns dict with:
+        - enabled: bool
+        - start_date: str (YYYY-MM-DD) or None
+        - end_date: str (YYYY-MM-DD) or None
+        - target_temp_c: float
+        - pre_heat_hours: int
+        """
+        installation = await self.get_installation()
+        return {
+            "enabled": installation.get("vacation_mode_enabled", False),
+            "start_date": installation.get("vacation_start_date"),
+            "end_date": installation.get("vacation_end_date"),
+            "target_temp_c": installation.get("vacation_target_temp_c", 15.0),
+            "pre_heat_hours": installation.get("vacation_pre_heat_hours", 4),
+        }
+
+    async def update_vacation_mode(
+        self,
+        enabled: bool,
+        start_date: str | None = None,
+        end_date: str | None = None,
+        target_temp_c: float = 15.0,
+        pre_heat_hours: int = 4,
+    ) -> dict[str, Any]:
+        """Enable or disable vacation mode.
+
+        Args:
+            enabled: Whether vacation mode should be active
+            start_date: Start date in YYYY-MM-DD format
+            end_date: End date in YYYY-MM-DD format
+            target_temp_c: Target temperature during vacation (default 15°C)
+            pre_heat_hours: Hours before return to start pre-heating (default 4)
+
+        Returns:
+            Updated installation data
+        """
+        data = {
+            "enabled": enabled,
+            "start_date": start_date,
+            "end_date": end_date,
+            "target_temp_c": target_temp_c,
+            "pre_heat_hours": pre_heat_hours,
+        }
+        return await self._request("PATCH", API_VACATION, data=data)
+
+    async def set_zone_target_temp(
+        self,
+        zone_id: str,
+        target_temp_c: float,
+    ) -> dict[str, Any]:
+        """Set target temperature for a zone (bidirectional control).
+
+        This allows HA to set the target temp which will be used by
+        the IoT Platform optimizer.
+
+        Args:
+            zone_id: UUID of the zone
+            target_temp_c: Target temperature in Celsius
+
+        Returns:
+            Updated zone data
+        """
+        data = {"target_temp_c": target_temp_c}
+        return await self._request("PUT", f"{API_ZONES}/{zone_id}", data=data)
 
     async def close(self) -> None:
         """Close the session."""
